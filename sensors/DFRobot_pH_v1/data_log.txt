@@ -1,0 +1,102 @@
+
+###=============###
+### DESCRIPTION ###
+###=============###
+
+Calibration and testing of DFRobot (SEN0161) and Hanna Instruments (HI1286) 
+analog pH sensors with a DFRobot pH meter v1.1 (SEN0161) over a month.
+
+
+
+###===========###
+###  RESULTS  ### 
+###===========###
+
+Both sensors work well with a small drift and stable voltage 
+output over weeks (if the room temperature is stable). 
+
+
+
+###=========###
+###  NOTES  ###
+###=========###
+
+Temperature compensation is not implemented in the DFRobot meter v.1.
+Room temperature slightly affects pH: more t lower pH.
+
+
+
+###===========###
+###  LOGGING  ###
+###===========###
+
+#----------------------------------------#
+# The pH sensor from DFRobot is inserted #
+#----------------------------------------#
+
+Date	Time	pH	Voltage	Comments
+21.02.2022	20:30	9.65	2.47	CALIBRATION, pH_10, PotLC, 4.42kOhm, Offset: 1.0
+21.02.2022	20:30	7.03	1.72	CALIBRATION, pH_7, PotLC, 4.42kOhm, Offset: 1.0
+21.02.2022	20:30	4.00	0.86	CALIBRATION, pH_4, PotLC, 4.42kOhm, Offset: 1.0
+
+21.02.2022	20:40	9.12	2 32	The cold water was added from a sink water is passively warming up during
+21.02.2022	20:45	8.42	2.14	The cold water was added from a sink water is passively warming up during
+21.02.2022	20:50	8.18	2.05	The cold water was added from a sink water is passively warming up during
+21.02.2022	20:55	7.99	1.99	The cold water was added from a sink water is passively warming up during
+21.02.2022	21:00	7.87	1.96	The cold water was added from a sink water is passively warming up during
+21.02.2022	21:05	7.78	1.94	The cold water was added from a sink water is passively warming up during
+21.02.2022	21:10	7.75	1.93	The cold water was added from a sink water is passively warming up during
+21.02.2022	21:15	7.72	1.92	The cold water was added from a sink water is passively warming up during
+21.02.2022	21:20	7.69	1.91	The cold water was added from a sink water is passively warming up during
+
+22.02.2022	15:00	7.78	1.94	stabilised, pH range: 7.7-7.8
+22.02.2022	20:00	7.76	1.92	stabilised, pH range: 7.7-7.8
+
+22.02.2022	20:30	9.73	2.50	pH_10
+22.02.2022	20:40	7.10	1.74	pH_7
+22.02.2022	20:50	4.04	0.87	pH_4
+
+23.02.2022	14:00	7.83	1.95
+23.02.2022	20:00	7.83	1.95
+
+23.02.2022	20:30	9.71	2.49	pH_10
+23.02.2022	20:40	7.14	1.75	pH_7
+23.02.2022	20:50	4.04	0.87	pH_4
+
+07.03.2022	13:46	8.05	2.01	warmer room temperature
+
+07.03.2022	16:00	9.76	2.51	pH_10, warmer room temperature
+07.03.2022	16:10	7.15	1.76	pH_7, warmer room temperature
+07.03.2022	16:20	4.06	0.88	pH_4, warmer room temperature
+
+07.03.2022	19:27	7.80	1.95
+
+10.03.2022	17:03	7.91	1.98
+
+10.03.2022	17:20	9.80	2.51	pH_10, the room temperature is slightly higher
+10.03.2022	17:30	7.19	1.77	pH_7, the room temperature is slightly higher
+10.03.2022	17:40	4.10	0.89	pH_4, the room temperature is slightly higher
+
+10.03.2022	20:41	7.93	1.98
+
+11.03.2022	13:21	7.90	1.97
+11.03.2022	19:33	8.00	2.00
+
+
+
+#-------------------------------------------------#
+# The pH sensor from HannaInstruments is inserted #
+#-------------------------------------------------#
+
+Date	Time	pH	Voltage	Comments
+14.03.2022	18:22	8.06	2.02	Old calibration settings in the meter, no changes
+
+14.03.2022	18:22	10.00	2.57	pH_10, sunny weather, the temperature fluctuates during a day
+14.03.2022	18:32	7.64	1.90	pH_7, sunny weather, the temperature fluctuates during a day
+14.03.2022	18:42	4.67	1.05	pH_4, sunny weather, the temperature fluctuates during a day
+
+17.03.2022	11:30	8.07	2.02
+
+17.03.2022	11:40	10.18	2.62	pH_10, sunny weather, the temperature fluctuates during a day
+17.03.2022	11:50	7.73	1.92	pH_7, sunny weather, the temperature fluctuates during a day
+17.03.2022	11:57	4.68	1.05	pH_4, sunny weather, the temperature fluctuates during a day
