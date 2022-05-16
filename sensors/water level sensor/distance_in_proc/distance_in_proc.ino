@@ -11,9 +11,7 @@ Serial.begin(9600);
 Serial.println("\nWater level sensor");
 }
 
-void loop() {
-
-  //calculating average %  
+void loop() {  
   
   int distance_perc;    // distance declaration (in %)
   float sum = 0;        // sum declaration
