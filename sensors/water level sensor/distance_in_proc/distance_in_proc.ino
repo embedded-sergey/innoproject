@@ -5,32 +5,48 @@ long duration;
 int distance;
 
 void setup() {
-
 pinMode(trigPin, OUTPUT); 
 pinMode(echoPin, INPUT); 
 Serial.begin(9600);
-Serial.println("Water level sensor");
+Serial.println("\nWater level sensor");
 }
+
 void loop() {
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(2);
+
+  //calculating average %  
   
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(1000); // ### CHECK ###; 1000 is more stable, than orig 10
+  int distance_perc;    // distance declaration (in %)
+  float sum = 0;        // sum declaration
+  int av_dist = 0;      // average distance declaration (in cm)
   
-  digitalWrite(trigPin, LOW);
   
-  duration = pulseIn(echoPin, HIGH);
-  distance = duration * 0.34 / 2; // Speed of sound wave divided by 2 (go and back)
-  int distance_proc = map(distance, 20, 270, 0, 100); //air buffer 2 cm
-  Serial.print("Distance in %: ");
-  Serial.print(distance_proc);
-  Serial.print(" % ");
+  for (int i=0 ; i<5 ; i++){         // 5 samples are taken
+    digitalWrite(trigPin, LOW);      // Clears the trigPin condition first
+    delayMicroseconds(2);
   
-  Serial.print("Distance: ");
-  Serial.print(distance);
-  Serial.println(" cm");
-  delay(980);
+    digitalWrite(trigPin, HIGH);     // Sets the trigPin HIGH (ACTIVE) for 10 microseconds (time for 8 cycle sonic bursts)
+    delayMicroseconds(10); 
+  
+    digitalWrite(trigPin, LOW);
+    duration = pulseIn(echoPin, HIGH);  // Reads the echoPin, returns the sound wave travel time in microseconds
+    
+    distance = duration * 0.034 / 2;    // Speed of sound wave divided by 2 (go and back)
+    sum = sum + distance;               // Sum calculation
+    delay(20);
+  }
+
+  av_dist = round(sum / 5.0);                          // one average value of distance in cm
+  distance_perc = map(av_dist, 2, 27, 0, 100);         // one average value of distance in % | sensor's range starts from 2 cm (fixed)
+  
+  Serial.print("\nDistance: ");          // prints average of 5 samples in cm
+  Serial.print(av_dist);
+  Serial.print(" cm \n");
+
+  Serial.print("\nDistance in %: ");     // prints average of 5 samples in %
+  Serial.print(distance_perc);
+  Serial.print(" % \n");
+
+  delay(900);
 }
 
 /* References: 
