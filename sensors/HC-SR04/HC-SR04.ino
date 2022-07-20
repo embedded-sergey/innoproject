@@ -1,18 +1,22 @@
 #include <Controllino.h>
 #define echoPin 4
-#define trigPin 5 
+#define trigPin 5
+
+#define RELAY_0 22      //Relay num. 0, pin 22
+
 long duration;
 int distance;
 
 void setup() {
+pinMode(RELAY_0, OUTPUT);
 pinMode(trigPin, OUTPUT); 
 pinMode(echoPin, INPUT); 
 Serial.begin(9600);
 Serial.println("\nWater level sensor");
 }
 
-void loop() {  
-  
+void loop() {
+
   int distance_perc;    // distance declaration (in %)
   float sum = 0;        // sum declaration
   int av_dist = 0;      // average distance declaration (in cm)
@@ -45,6 +49,17 @@ void loop() {
   Serial.print(" % \n");
 
   delay(900);
+
+if (distance_perc <= 50){               //relay starts to work, when the main tank is less or 50% filled
+  digitalWrite(RELAY_0, HIGH);
+  }
+  else if (distance_perc >= 100) {      //tank won't be overfilled
+    digitalWrite(RELAY_0, LOW);
+  }
+  else{
+    digitalWrite(RELAY_0, LOW);         //in all other cases relay does not work
+  }
+
 }
 
 /* References: 
