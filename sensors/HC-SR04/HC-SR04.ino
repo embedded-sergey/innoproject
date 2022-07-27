@@ -2,7 +2,7 @@
 #define echoPin 4
 #define trigPin 5
 
-#define RELAY_0 22      //Relay num. 0, pin 22
+#define RELAY_0 22      //Relay num. 0, pin 22 to control a pump
 
 long duration;
 int distance;
@@ -50,14 +50,14 @@ void loop() {
 
   delay(900);
 
-if (distance_perc <= 50){               //relay starts to work, when the main tank is less or 50% filled
+if (distance_perc <= 50){               //pump starts to work, when the main tank is less or 50% filled
   digitalWrite(RELAY_0, HIGH);
   }
   else if (distance_perc >= 100) {      //tank won't be overfilled
     digitalWrite(RELAY_0, LOW);
   }
   else{
-    digitalWrite(RELAY_0, LOW);         //in all other cases relay does not work
+    digitalWrite(RELAY_0, LOW);         //in all other cases pump does not work
   }
 
 }
