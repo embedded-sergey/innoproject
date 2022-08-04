@@ -8,5 +8,13 @@ The control panel consists of three core elements:
 
 The other automation box components will be mounted on the DIN rail: i.e. 220 VAC to 12/24 VDC transformer, circuit breakers, terminal blocks etc. However, LED screen and sensor meters will be installed on the breadboard located next to Controllino Maxi. All the components will be installed into 300x400 mm [control cabinet](https://www.amazon.de/ELEKTRO-PLAST-Control-Distribution-Industrial-Surface-Mounted/dp/B00R3HS41U/ref=rvi_7/261-8255680-4129054?pd_rd_w=nTgOY&pf_rd_p=22019d9a-e205-410a-b337-2be913e3a486&pf_rd_r=WC1628P0KMTCZAG0ZTGB&pd_rd_r=ef9b4e1b-41d8-4ea9-bd4d-cda1da2f85f8&pd_rd_wg=aH9x4&pd_rd_i=B00R3HS41U&psc=1).
 
-## Installation intructions:
+## Installation intructions: 
+Raspberry Pi
+Install Raspbian os
+Follow this steps (https://github.com/ttu/ruuvitag-sensor/blob/master/install_guide_pi.md)
+Locate the ruuvitag-sensor package
+find all tags : $ ruuvitag -f
+Then write the code "Ruuvitag Sensors RP"
+
+
 ...
