@@ -15,6 +15,7 @@ Follow this steps (https://github.com/ttu/ruuvitag-sensor/blob/master/install_gu
 Locate the ruuvitag-sensor package
 find all tags : $ ruuvitag -f
 Then write the code "Ruuvitag Sensors RP"
+Then it should print on screen and save it on file (edit it as you wish)
 
 
 ...
