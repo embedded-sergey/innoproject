@@ -2,7 +2,7 @@
 // pH sensors with a DFRobot pH meter version 1.1 (SEN0161).
 
 #define SensorPin A0  //pH meter Analog output to Arduino Analog Input 0
-#define Offset 1.0  //deviation compensate
+#define Offset 0.4  //deviation compensate
 #define LED 13
 #define samplingInterval 20
 #define printInterval 800
