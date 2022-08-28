@@ -1,12 +1,11 @@
 #include <Controllino.h>
-#define SERIAL Serial
 #define sensorPin A1
 
 // No calibration required
 const float a = 0.020; //The electrical conductivity (EC) of an aqueous solution increases with temperature significantly: about 2 per degree Celsius.
   
 void setup() {
-    SERIAL.begin(9600);
+    Serial.begin(9600);
 }
 void loop() {
   int TDS_raw;
@@ -31,9 +30,9 @@ void loop() {
   }
 
 av_EC = sum / 5;  // average of 5 samples
-SERIAL.print("EC = "); 
-SERIAL.print(av_EC);
-SERIAL.println(" uS");
+Serial.print("EC = "); 
+Serial.print(av_EC);
+Serial.println(" uS");
 }
 
 // REFERENCES:

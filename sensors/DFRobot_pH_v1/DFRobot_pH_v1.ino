@@ -78,6 +78,6 @@ double avergearray(int* arr, int number){
   return avg;
 }
 
-// RESOURCES:
+// REFERENCES:
 // The code is based on the official instructions:
 // https://wiki.dfrobot.com/PH_meter_SKU__SEN0161_
