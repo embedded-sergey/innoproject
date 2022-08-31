@@ -14,8 +14,8 @@ const byte modbus_sensor_pin = A2;       // Analog 2    X1
 
 const byte water_temp_pin = 2;           // Digital 0   X1
 const byte water_level_trig_1_pin = 3;   // Digital 1   X1
-const byte water_level_trig_2_pin = 4;   // Digital 2   X1
-const byte water_level_echo_1_pin = 5;   // Digital 3   X1
+const byte water_level_echo_1_pin = 4;   // Digital 2   X1
+const byte water_level_trig_2_pin = 5;   // Digital 3   X1
 const byte water_level_echo_2_pin = 6;   // Digital 4   X1
 const byte buzzer_pin = 7;               // Digital 5   X2
 
@@ -97,11 +97,20 @@ void loop(void){
   av_EC = sum / 5;  // average of 5 samples
   Serial.print("EC (uS): "); 
   Serial.println(av_EC);
+
+  
+  void loop(){
+    tone(buzzer_pin, 400); //4000 in real life
+    delay(500);
+
+    noTone(buzzer_pin);
+    delay(500);
+  }
 }
 
 // REFERENCES:
 // 1. Code for 1-Wire protocol: https://lastminuteengineers.com/multiple-ds18b20-arduino-tutorial/
 // 2. DS18B20's datasheet : https://datasheets.maximintegrated.com/en/ds/DS18B20.pdf
 // 3. Official code for pH probe and its description: https://wiki.dfrobot.com/PH_meter_SKU__SEN0161_
-// 4. Original code for Grove TDS probe and its description: https://wiki.seeedstudio.com/Grove-TDS-Sensor/
+  // 4. Original code for Grove TDS probe and its description: https://wiki.seeedstudio.com/Grove-TDS-Sensor/
 // 5. Temperature compensation for EC: https://www.aqion.de/site/112Source: https://www.aqion.de/site/112

@@ -1,6 +1,6 @@
 #include <Controllino.h>
 
- const byte buzzer = 8;
+ const byte buzzer = 7;
 
 void setup() {
   Serial.begin(9600);  
