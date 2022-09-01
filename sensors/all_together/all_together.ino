@@ -48,8 +48,19 @@ uint8_t water_temp_2_address[8] = { 0x28, 0xFF, 0xC8, 0xC2, 0xC1, 0x16, 0x04, 0x
 // temperature significantly: about 2 per Celsius.
 const float a = 0.020; 
 
+// WATER LEVEL SENSOR 
+long duration;
+int distance;
 
 void setup(void){
+  pinMode(RELAY_0, OUTPUT);
+  pinMode(water_level_trig_1_pin, OUTPUT); 
+  pinMode(water_level_echo_1_pin, INPUT); 
+  Serial.begin(9600);
+  Serial.println("\nWater level sensor");
+}
+
+  
   Serial.begin(9600);
   sensors.begin(); // Start up the library
 }
@@ -98,7 +109,44 @@ void loop(void){
   Serial.print("EC (uS): "); 
   Serial.println(av_EC);
 
+
+  ////////////////////////
+  // Water level Sensor //
+  ////////////////////////
+  int distance_perc;    // distance declaration (in %)
+  float sum = 0;        // sum declaration
+  int av_dist = 0;      // average distance declaration (in cm)
   
+  
+  for (int i=0 ; i<5 ; i++){         // 5 samples are taken
+    digitalWrite(water_level_trig_1_pin, LOW);      // Clears the water_level_trig_1_pin condition first
+    delayMicroseconds(2);
+  
+    digitalWrite(water_level_trig_1_pin, HIGH);     // Sets the water_level_trig_1_pin HIGH (ACTIVE) for 10 microseconds (time for 8 cycle sonic bursts)
+    delayMicroseconds(10); 
+  
+    digitalWrite(water_level_trig_1_pin, LOW);
+    duration = pulseIn(water_level_echo_1_pin, HIGH);  // Reads the water_level_echo_1_pin, returns the sound wave travel time in microseconds
+    
+    distance = duration * 0.034 / 2;    // Speed of sound wave divided by 2 (go and back)
+    sum = sum + distance;               // Sum calculation
+    delay(20);
+  }
+
+  av_dist = round(sum / 5.0);                          // one average value of distance in cm
+  distance_perc = map(av_dist, 2, 27, 0, 100);         // one average value of distance in % | sensor's range starts from 2 cm (fixed)
+  
+  Serial.print("\nDistance: ");          // prints average of 5 samples in cm
+  Serial.print(av_dist);
+  Serial.print(" cm \n");
+
+  Serial.print("\nDistance in %: ");     // prints average of 5 samples in %
+  Serial.print(distance_perc);
+  Serial.print(" % \n");
+
+  ////////////
+  // Buzzer //
+  ////////////
   void loop(){
     tone(buzzer_pin, 400); //4000 in real life
     delay(500);
