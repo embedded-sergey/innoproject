@@ -3,7 +3,7 @@
 ////////////////////////
 #include <Controllino.h>
 #include <OneWire.h>
-#include <DallasTemperature.h>
+#include <DallasTemperature.h> 
 
 ////////////////
 // PINOUT MAP // 
@@ -53,15 +53,11 @@ long duration;
 int distance;
 
 void setup(void){
-  pinMode(RELAY_0, OUTPUT);
+  //pinMode(RELAY_0, OUTPUT);
   pinMode(water_level_trig_1_pin, OUTPUT); 
   pinMode(water_level_echo_1_pin, INPUT); 
   Serial.begin(9600);
   Serial.println("\nWater level sensor");
-}
-
-  
-  Serial.begin(9600);
   sensors.begin(); // Start up the library
 }
 
@@ -114,7 +110,7 @@ void loop(void){
   // Water level Sensor //
   ////////////////////////
   int distance_perc;    // distance declaration (in %)
-  float sum = 0;        // sum declaration
+  float sum1 = 0;        // sum declaration
   int av_dist = 0;      // average distance declaration (in cm)
   
   
@@ -129,11 +125,11 @@ void loop(void){
     duration = pulseIn(water_level_echo_1_pin, HIGH);  // Reads the water_level_echo_1_pin, returns the sound wave travel time in microseconds
     
     distance = duration * 0.034 / 2;    // Speed of sound wave divided by 2 (go and back)
-    sum = sum + distance;               // Sum calculation
+    sum1 = sum1 + distance;               // Sum calculation
     delay(20);
   }
 
-  av_dist = round(sum / 5.0);                          // one average value of distance in cm
+  av_dist = round(sum1 / 5.0);                          // one average value of distance in cm
   distance_perc = map(av_dist, 2, 27, 0, 100);         // one average value of distance in % | sensor's range starts from 2 cm (fixed)
   
   Serial.print("\nDistance: ");          // prints average of 5 samples in cm
@@ -147,13 +143,12 @@ void loop(void){
   ////////////
   // Buzzer //
   ////////////
-  void loop(){
-    tone(buzzer_pin, 400); //4000 in real life
-    delay(500);
 
-    noTone(buzzer_pin);
-    delay(500);
-  }
+  tone(buzzer_pin, 400); //4000 in real life
+  delay(500);
+
+  noTone(buzzer_pin);
+  delay(500);
 }
 
 // REFERENCES:
