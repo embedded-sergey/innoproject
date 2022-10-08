@@ -6,7 +6,7 @@
 // Important note only address 0 is reserved for a Modbus master device!
 
 #define MasterModbusAdd 0  // Controllino Maxi
-#define SlaveModbusAdd 240 // Vaisala probe HMP60
+#define SlaveModbusAdd 239 // Vaisala probe HMP60
 
 // This MACRO defines number of the comport that is used for RS 485 interface.
 // For MAXI and MEGA RS485 is reserved UART Serial3.
@@ -115,19 +115,19 @@ void loop() {
         Serial.println(ModbusSlaveRegisters[3], HEX);
         Serial.println("");
         
-        float HMP60_humidity;
-        unsigned long *HMP60_humidity_uint32;
-        HMP60_humidity_uint32 = (unsigned long*)&HMP60_humidity;
-        *HMP60_humidity_uint32 = (unsigned long)ModbusSlaveRegisters[1]<<16 | ModbusSlaveRegisters[0]; // Float - Mid-Little Endian CDAB
-        Serial.print("Air humidity (%RH): ");
-        Serial.println(HMP60_humidity, 2);
+        float GMP252_CO2;
+        unsigned long *GMP252_CO2_uint32;
+        GMP252_CO2_uint32 = (unsigned long*)&GMP252_CO2;
+        *GMP252_CO2_uint32 = (unsigned long)ModbusSlaveRegisters[1]<<16 | ModbusSlaveRegisters[0]; // Float - Mid-Little Endian CDAB
+        Serial.print("Carbon Dioxide (ppm): ");
+        Serial.println(GMP252_CO2, 2);
 
-        float HMP60_temperature;
-        unsigned long *HMP60_temperature_uint32;
-        HMP60_temperature_uint32 = (unsigned long*)&HMP60_temperature;
-        *HMP60_temperature_uint32 = (unsigned long)ModbusSlaveRegisters[3]<<16 | ModbusSlaveRegisters[2]; // Float - Mid-Little Endian CDAB
-        Serial.print("Air temperature (°C): ");
-        Serial.println(HMP60_temperature, 2);
+        float GMP252_temperature;
+        unsigned long *GMP252_temperature_uint32;
+        GMP252_temperature_uint32 = (unsigned long*)&GMP252_temperature;
+        *GMP252_temperature_uint32 = (unsigned long)ModbusSlaveRegisters[3]<<16 | ModbusSlaveRegisters[2]; // Float - Mid-Little Endian CDAB
+        Serial.print("Compensation temperature (°C): ");
+        Serial.println(GMP252_temperature, 2);
 
         Serial.println("-------------------------------------");
         Serial.println("");
@@ -153,4 +153,4 @@ void loop() {
 // 2. Example code: https://github.com/CONTROLLINO-PLC/CONTROLLINO_Library/blob/master/MAXI/DemoModbusRTUMaster/ModbusRtu.h
 // 3. From uint32 to float (IEEE-754): https://forum.arduino.cc/t/combine-two-uint16_t-in-one-float/507834/17 
 // 4. Hex converter: https://www.scadacore.com/tools/programming-calculators/online-hex-converter/
-// 5. Vaisala HMP60: https://docs.vaisala.com/r/M211060EN-J/en-US/GUID-899F92B4-583C-404B-A4BA-0D47330C6573
+// 5. Vaisala GMP252: https://docs.vaisala.com/r/M211897EN-D/en-US/GUID-AE8B2A71-0D18-41D9-8365-27B848E709BD
