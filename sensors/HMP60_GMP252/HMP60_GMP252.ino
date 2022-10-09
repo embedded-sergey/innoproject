@@ -6,7 +6,8 @@
 // Important note only address 0 is reserved for a Modbus master device!
 
 #define MasterModbusAdd 0  // Controllino Maxi
-#define SlaveModbusAdd 239 // Vaisala probe GMP252
+#define SlaveModbusAdd_HMP60  240 // Vaisala probe HMP60
+#define SlaveModbusAdd_GMP252 239 // Vaisala probe GMP252
 
 // This MACRO defines number of the comport that is used for RS 485 interface.
 // For MAXI and MEGA RS485 is reserved UART Serial3.
@@ -48,20 +49,18 @@ void setup() {
   Serial.println("-----------------------------------------");
   Serial.println("");
   // ModbusQuery 0: read registers
-  ModbusQuery[0].u8id = SlaveModbusAdd; // slave address
+  ModbusQuery[0].u8id = SlaveModbusAdd_HMP60; // slave address
   ModbusQuery[0].u8fct = 3; // function code (this one is registers read)
   ModbusQuery[0].u16RegAdd = 0; // start address in slave
   ModbusQuery[0].u16CoilsNo = 4; // number of elements (coils or registers) to read
   ModbusQuery[0].au16reg = ModbusSlaveRegisters; // pointer to a memory array in the CONTROLLINO
   
-  // ModbusQuery 1: write a single register
-  // ModbusQuery[1].u8id = SlaveModbusAdd; // slave address
-  // ModbusQuery[1].u8fct = 6; // function code (this one is write a single register)
-  // ModbusQuery[1].u16RegAdd = 4; // start address in slave
-  // ModbusQuery[1].u16CoilsNo = 1; // number of elements (coils or registers) to write
-  // ModbusQuery[1].au16reg = ModbusSlaveRegisters+4; // pointer to a memory array in the CONTROLLINO
-  // ModbusSlaveRegisters[4] = 1; // initial value for the relays 
- 
+  ModbusQuery[1].u8id = SlaveModbusAdd_GMP252; // slave address
+  ModbusQuery[1].u8fct = 3; // function code (this one is registers read)
+  ModbusQuery[1].u16RegAdd = 0; // start address in slave
+  ModbusQuery[1].u16CoilsNo = 4; // number of elements (coils or registers) to read
+  ModbusQuery[1].au16reg = ModbusSlaveRegisters+4; // pointer to a memory array in the CONTROLLINO
+  
   ControllinoModbusMaster.begin(19200, SERIAL_8N2); // baud-rate at 19200, 8-bit data, 
                                                     // no parity, 2 stop bits 
   ControllinoModbusMaster.setTimeOut( 5000 ); // if there is no answer in 5000 ms, roll over
@@ -77,9 +76,9 @@ void loop() {
     if (millis() > WaitingTime) myState++; // wait state
     break;
     case 1: 
-    // Serial.print("---- Sending query ");
-    // Serial.print(currentQuery);
-    // Serial.println(" -------------");
+    //Serial.print("---- Sending query ");
+    //Serial.print(currentQuery);
+    //Serial.println(" -------------");
     ControllinoModbusMaster.query( ModbusQuery[currentQuery] ); // send query (only once)
     myState++;
     currentQuery++;
@@ -93,18 +92,19 @@ void loop() {
       // response from the slave was received
       myState = 0;
       WaitingTime = millis() + 1000; 
-      // debug printout
+      // debug printout   
       if (currentQuery == 0){
         // registers write was proceed
         // Serial.println("---------- WRITE RESPONSE RECEIVED ----");
         // Serial.println("");
       }
+         
       if (currentQuery == 1){
         // registers read was proceed
         Serial.println("---------- READ RESPONSE RECEIVED ----");
-        Serial.println("Slave device: Vaisala GMP252");
+        Serial.println("Slave device: Vaisala HMP60");
         Serial.print("Modbus address: ");
-        Serial.println(SlaveModbusAdd, DEC); 
+        Serial.println(SlaveModbusAdd_HMP60, DEC); 
         Serial.print("Humidity registers (lsb, msb): "); // lsb and msb - least and most significant bits
         Serial.print(ModbusSlaveRegisters[0], HEX);
         Serial.print(", ");
@@ -115,33 +115,53 @@ void loop() {
         Serial.println(ModbusSlaveRegisters[3], HEX);
         Serial.println("");
         
+        float HMP60_humidity;
+        unsigned long *HMP60_humidity_uint32;
+        HMP60_humidity_uint32 = (unsigned long*)&HMP60_humidity;
+        *HMP60_humidity_uint32 = (unsigned long)ModbusSlaveRegisters[1]<<16 | ModbusSlaveRegisters[0]; // Float - Mid-Little Endian CDAB
+        Serial.print("Air humidity (%RH): ");
+        Serial.println(HMP60_humidity, 2);
+
+        float HMP60_temperature;
+        unsigned long *HMP60_temperature_uint32;
+        HMP60_temperature_uint32 = (unsigned long*)&HMP60_temperature;
+        *HMP60_temperature_uint32 = (unsigned long)ModbusSlaveRegisters[3]<<16 | ModbusSlaveRegisters[2]; // Float - Mid-Little Endian CDAB
+        Serial.print("Air temperature (°C): ");
+        Serial.println(HMP60_temperature, 2);
+
+        Serial.println("-------------------------------------");
+        Serial.println("");
+ 
+        // registers read was proceed
+        Serial.println("Slave device: Vaisala GMP252");
+        Serial.print("Modbus address: ");
+        Serial.println(SlaveModbusAdd_GMP252, DEC); 
+        Serial.print("Humidity registers (lsb, msb): "); // lsb and msb - least and most significant bits
+        Serial.print(ModbusSlaveRegisters[4], HEX);
+        Serial.print(", ");
+        Serial.println(ModbusSlaveRegisters[5], HEX);
+        Serial.print("Temperature registers (lsb, msb): ");
+        Serial.print(ModbusSlaveRegisters[6], HEX);
+        Serial.print(", ");
+        Serial.println(ModbusSlaveRegisters[7], HEX);
+        Serial.println("");
+        
         float GMP252_CO2;
         unsigned long *GMP252_CO2_uint32;
         GMP252_CO2_uint32 = (unsigned long*)&GMP252_CO2;
-        *GMP252_CO2_uint32 = (unsigned long)ModbusSlaveRegisters[1]<<16 | ModbusSlaveRegisters[0]; // Float - Mid-Little Endian CDAB
+        *GMP252_CO2_uint32 = (unsigned long)ModbusSlaveRegisters[5]<<16 | ModbusSlaveRegisters[4]; // Float - Mid-Little Endian CDAB
         Serial.print("Carbon Dioxide (ppm): ");
         Serial.println(GMP252_CO2, 2);
 
         float GMP252_temperature;
         unsigned long *GMP252_temperature_uint32;
         GMP252_temperature_uint32 = (unsigned long*)&GMP252_temperature;
-        *GMP252_temperature_uint32 = (unsigned long)ModbusSlaveRegisters[3]<<16 | ModbusSlaveRegisters[2]; // Float - Mid-Little Endian CDAB
+        *GMP252_temperature_uint32 = (unsigned long)ModbusSlaveRegisters[7]<<16 | ModbusSlaveRegisters[6]; // Float - Mid-Little Endian CDAB
         Serial.print("Compensation temperature (°C): ");
         Serial.println(GMP252_temperature, 2);
 
         Serial.println("-------------------------------------");
         Serial.println("");
-        // toggle with the relays
-        ModbusQuery[1].u16RegAdd++;
-        if (ModbusQuery[1].u16RegAdd == 8){
-          ModbusQuery[1].u16RegAdd = 4;
-          if (ModbusSlaveRegisters[4]){
-            ModbusSlaveRegisters[4] = 0;
-          }
-          else {
-            ModbusSlaveRegisters[4] = 1;
-          }
-        }
       }
     }
     break;
@@ -153,4 +173,4 @@ void loop() {
 // 2. Example code: https://github.com/CONTROLLINO-PLC/CONTROLLINO_Library/blob/master/MAXI/DemoModbusRTUMaster/ModbusRtu.h
 // 3. From uint32 to float (IEEE-754): https://forum.arduino.cc/t/combine-two-uint16_t-in-one-float/507834/17 
 // 4. Hex converter: https://www.scadacore.com/tools/programming-calculators/online-hex-converter/
-// 5. Vaisala GMP252: https://docs.vaisala.com/r/M211897EN-D/en-US/GUID-AE8B2A71-0D18-41D9-8365-27B848E709BD
+// 5. Vaisala HMP60: https://docs.vaisala.com/r/M211060EN-J/en-US/GUID-899F92B4-583C-404B-A4BA-0D47330C6573
