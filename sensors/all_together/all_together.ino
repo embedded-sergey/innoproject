@@ -32,9 +32,8 @@ const byte water_heater_pin = 24;        // Relay 2     R2
 OneWire oneWire(water_temp_pin);
 // Pass our oneWire reference to Dallas Temperature.
 DallasTemperature sensors(&oneWire);
-// Insert addresses (to get, see DS18B20_get_address):
+// Insert address (to get, see DS18B20_get_address):
 uint8_t water_temp_1_address[8] = { 0x28, 0x7F, 0x17, 0xAC, 0x13, 0x19, 0x01, 0x9A };
-uint8_t water_temp_2_address[8] = { 0x28, 0xFF, 0xC8, 0xC2, 0xC1, 0x16, 0x04, 0xB5 };
 
 // ELECTRIC CONDUCTIVITY
 // No calibration required for EC. The electrical 
@@ -48,8 +47,8 @@ int distance;
 
 void setup(void){
   //pinMode(RELAY_0, OUTPUT);
-  pinMode(water_level_trig_1_pin, OUTPUT); 
-  pinMode(water_level_echo_1_pin, INPUT); 
+  pinMode(water_level_trig_pin, OUTPUT); 
+  pinMode(water_level_echo_pin, INPUT); 
   Serial.begin(9600);
   Serial.println("\nWater level sensor");
   sensors.begin(); // Start up the library
@@ -60,29 +59,22 @@ void loop(void){
   // Water Temperature sensors //
   /////////////////////////////// 
   sensors.requestTemperatures();
-  Serial.print("Water_temp_1 (°C): ");
-  float water_temp_1 = sensors.getTempC(water_temp_1_address);
-  Serial.print(water_temp_1);
+  Serial.print("Water_temp (°C): ");
+  float water_temp = sensors.getTempC(water_temp_address);
+  Serial.print(water_temp);
   Serial.print("\t");
-  Serial.print("Water_temp_2 (°C): ");
-  float water_temp_2 = sensors.getTempC(water_temp_2_address);
-  Serial.print(water_temp_2);
-  Serial.print("\t");
-
-
 
   ///////////////
   // EC sensor //
   ///////////////
-  int TDS_raw;
-  //int TEMP_raw for waterproof LM35;
+  int TDS_raw;  //int TEMP_raw for waterproof LM35;
   float Voltage;
   float TDS_25;
   float EC_25;
   float av_EC;
   float EC;
 
-  float sum = 0;
+  float EC_sum = 0;
   float t = 25; // VALUE FROM SENSOR!!!
   
   for (int i=0 ; i<5; i++){
@@ -91,11 +83,11 @@ void loop(void){
     TDS_25=(133.42/Voltage*Voltage*Voltage - 255.86*Voltage*Voltage + 857.39*Voltage)*0.5; //Convert voltage value to TDS value (original)
     EC_25 = TDS_25*2;
     EC = (1 + a*(t - 25))*EC_25;
-    sum = sum + EC;        //sum formula for the following average calculation
+    EC_sum = EC_sum + EC;        //sum formula for the following average calculation
     delay(10);
   }
 
-  av_EC = sum / 5;  // average of 5 samples
+  av_EC = EC_sum / 5;  // average of 5 samples
   Serial.print("EC (uS): "); 
   Serial.println(av_EC);
 
@@ -104,26 +96,26 @@ void loop(void){
   // Water level Sensor //
   ////////////////////////
   int distance_perc;    // distance declaration (in %)
-  float sum1 = 0;        // sum declaration
+  float water_level_sum = 0;        // sum declaration
   int av_dist = 0;      // average distance declaration (in cm)
   
   
   for (int i=0 ; i<5 ; i++){         // 5 samples are taken
-    digitalWrite(water_level_trig_1_pin, LOW);      // Clears the water_level_trig_1_pin condition first
+    digitalWrite(water_level_trig_pin, LOW);      // Clears the water_level_trig_pin condition first
     delayMicroseconds(2);
   
-    digitalWrite(water_level_trig_1_pin, HIGH);     // Sets the water_level_trig_1_pin HIGH (ACTIVE) for 10 microseconds (time for 8 cycle sonic bursts)
+    digitalWrite(water_level_trig_pin, HIGH);     // Sets the water_level_trig_pin HIGH (ACTIVE) for 10 microseconds (time for 8 cycle sonic bursts)
     delayMicroseconds(10); 
   
-    digitalWrite(water_level_trig_1_pin, LOW);
-    duration = pulseIn(water_level_echo_1_pin, HIGH);  // Reads the water_level_echo_1_pin, returns the sound wave travel time in microseconds
+    digitalWrite(water_level_trig_pin, LOW);
+    duration = pulseIn(water_level_echo_pin, HIGH);  // Reads the water_level_echo_pin, returns the sound wave travel time in microseconds
     
     distance = duration * 0.034 / 2;    // Speed of sound wave divided by 2 (go and back)
-    sum1 = sum1 + distance;               // Sum calculation
+    water_level_sum = water_level_sum + distance;               // Sum calculation
     delay(20);
   }
 
-  av_dist = round(sum1 / 5.0);                          // one average value of distance in cm
+  av_dist = round(water_level_sum / 5.0);                          // one average value of distance in cm
   distance_perc = map(av_dist, 2, 27, 0, 100);         // one average value of distance in % | sensor's range starts from 2 cm (fixed)
   
   Serial.print("\nDistance: ");          // prints average of 5 samples in cm
