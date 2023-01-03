@@ -12,20 +12,13 @@ void setup() {
 
 // the loop function runs over and over again forever
 void loop() {
- int n; 
- Serial.print("Day: ");n = Controllino_GetDay(); Serial.println(n);
- 
- Serial.print("WeekDay: ");n = Controllino_GetWeekDay(); Serial.println(n);
- 
- Serial.print("Month: ");n = Controllino_GetMonth(); Serial.println(n);
-
- Serial.print("Year: ");n = Controllino_GetYear(); Serial.println(n);
-
- Serial.print("Hour: ");n = Controllino_GetHour(); Serial.println(n);
-
- Serial.print("Minute: "); n = Controllino_GetMinute(); Serial.println(n);
-
- Serial.print("Second: ");n = Controllino_GetSecond(); Serial.println(n);
- 
- delay(5000); 
+  int n; 
+  Serial.print("Day: ");n = Controllino_GetDay(); Serial.println(n);
+  Serial.print("WeekDay: ");n = Controllino_GetWeekDay(); Serial.println(n);
+  Serial.print("Month: ");n = Controllino_GetMonth(); Serial.println(n);
+  Serial.print("Year: ");n = Controllino_GetYear(); Serial.println(n);
+  Serial.print("Hour: ");n = Controllino_GetHour(); Serial.println(n);
+  Serial.print("Minute: "); n = Controllino_GetMinute(); Serial.println(n);
+  Serial.print("Second: ");n = Controllino_GetSecond(); Serial.println(n);
+  delay(5000); 
 }
