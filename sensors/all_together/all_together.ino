@@ -4,16 +4,20 @@
 #include <Controllino.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include "ModbusRtu.h" // for the Modbus RTU protocol add this file
 
 
 ////////////////////////////////////////////////////////////////////
 /////////////////////////   PINOUT MAP   /////////////////////////// 
 ////////////////////////////////////////////////////////////////////
+
+////////// ANALOG //////////
 const byte ph_sensor_pin = A0;           // Analog 0    X1
 const byte tds_sensor_pin = A1;          // Analog 1    X1
 const byte water_level_trig_pin = A2;    // Analog 2    X1
 const byte water_level_echo_pin = A3;    // Analog 3    X1
 
+////////// DIGITAL //////////
 const byte water_temp_pin = 2;           // Digital 0   X1
 const byte led_strip_1_pin = 3;          // Digital 1   X1
 const byte led_strip_2_pin = 4;          // Digital 2   X1
@@ -21,9 +25,27 @@ const byte flow_meter_1_pin = 5;         // Digital 3   X1
 const byte flow_meter_2_pin = 6;         // Digital 4   X1
 const byte buzzer_pin = 7;               // Digital 5   X1
 
+////////// INTERFACES //////////
+const byte raspi_tx_pin = 18;            // UART TX     X1
+const byte raspi_rx_pin = 19;            // UART RX     X1
+const byte orp_sda_pin = 20;                 // I2C SDA     X1
+const byte orp_scl_pin = 21;                 // I2C SCL     X1
+
+////////// RELAYS //////////
 const byte water_rack_pump_1_pin = 22;   // Relay 0     R0
 const byte water_rack_pump_2_pin = 23;   // Relay 1     R1
 const byte water_heater_pin = 24;        // Relay 2     R2
+
+////////// MODBUS RTU //////////
+const byte MasterModbusAdd 0  // Controllino Maxi
+const byte SlaveModbusAdd 239 // Vaisala probe GMP252
+const byte RS485Serial 3
+Modbus ControllinoModbusMaster(MasterModbusAdd, RS485Serial, 0);
+uint16_t ModbusSlaveRegisters[8];
+modbus_t ModbusQuery[2];
+uint8_t myState;
+uint8_t currentQuery;
+unsigned long WaitingTime;
 
 
 ////////////////////////////////////////////////////////////////////
