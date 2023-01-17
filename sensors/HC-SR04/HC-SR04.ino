@@ -1,5 +1,5 @@
 #include <Controllino.h>
-#define echoPin 4
+#define echoPin 6
 #define trigPin 5
 
 #define RELAY_0 22      //Relay num. 0, pin 22 to control a pump

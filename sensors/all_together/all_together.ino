@@ -4,8 +4,6 @@
 #include <Controllino.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
-#include "ModbusRtu.h" // for the Modbus RTU protocol add this file
-
 
 ////////////////////////////////////////////////////////////////////
 /////////////////////////   PINOUT MAP   /////////////////////////// 
@@ -14,44 +12,44 @@
 ////////// ANALOG //////////
 const byte ph_sensor_pin = A0;           // Analog 0    X1
 const byte tds_sensor_pin = A1;          // Analog 1    X1
-const byte water_level_trig_pin = A2;    // Analog 2    X1
-const byte water_level_echo_pin = A3;    // Analog 3    X1
 
 ////////// DIGITAL //////////
 const byte water_temp_pin = 2;           // Digital 0   X1
 const byte led_strip_1_pin = 3;          // Digital 1   X1
 const byte led_strip_2_pin = 4;          // Digital 2   X1
-const byte flow_meter_1_pin = 5;         // Digital 3   X1
-const byte flow_meter_2_pin = 6;         // Digital 4   X1
+const byte water_level_trig_pin = 5;     // Digital 3   X1
+const byte water_level_echo_pin = 6;     // Digital 4   X1
 const byte buzzer_pin = 7;               // Digital 5   X1
 
 ////////// INTERFACES //////////
 const byte raspi_tx_pin = 18;            // UART TX     X1
 const byte raspi_rx_pin = 19;            // UART RX     X1
-const byte orp_sda_pin = 20;                 // I2C SDA     X1
-const byte orp_scl_pin = 21;                 // I2C SCL     X1
+const byte orp_sda_pin = 20;             // I2C SDA     X1
+const byte orp_scl_pin = 21;             // I2C SCL     X1
 
 ////////// RELAYS //////////
 const byte water_rack_pump_1_pin = 22;   // Relay 0     R0
 const byte water_rack_pump_2_pin = 23;   // Relay 1     R1
 const byte water_heater_pin = 24;        // Relay 2     R2
 
-////////// MODBUS RTU //////////
-const byte MasterModbusAdd 0  // Controllino Maxi
-const byte SlaveModbusAdd 239 // Vaisala probe GMP252
-const byte RS485Serial 3
-Modbus ControllinoModbusMaster(MasterModbusAdd, RS485Serial, 0);
-uint16_t ModbusSlaveRegisters[8];
-modbus_t ModbusQuery[2];
-uint8_t myState;
-uint8_t currentQuery;
-unsigned long WaitingTime;
-
+////////////////////////////////////////////////////////////////////
+///////////////////////// MILLIS VARAIBLES /////////////////////////
+////////////////////////////////////////////////////////////////////
+unsigned long startWaterLevelMillis;
+unsigned long startBuzzerAlarmMillis;
+unsigned long currentMillis;
+const unsigned long waterLevelPeriod = 1000;
+const unsigned long buzzerAlarmPeriod = 500;
 
 ////////////////////////////////////////////////////////////////////
 /////////////////////   SENSOR CONFIGURATIONS   ////////////////////
 ////////////////////////////////////////////////////////////////////
 
+////////// WATER LEVEL //////////
+long duration;
+int distance;
+int av_dist;
+/*
 ////////// WATER TEMPERATURE //////////
 // Setup a oneWire instance to communicate with any OneWire devices
 OneWire oneWire(water_temp_pin);
@@ -64,10 +62,7 @@ uint8_t water_temp_address[8] = { 0x28, 0x7F, 0x17, 0xAC, 0x13, 0x19, 0x01, 0x9A
 // No calibration required for EC. The electrical conductivity of an aqueous
 // solution increases with temperature significantly: about 2 per Celsius
 const float a = 0.020;
-
-////////// WATER LEVEL //////////
-long duration;
-int distance;
+*/
 
 
 ////////////////////////////////////////////////////////////////////
@@ -79,7 +74,12 @@ void setup(void){
   pinMode(water_level_echo_pin, INPUT);
   Serial.begin(9600);
   Serial.println("\nWater level sensor");
+
+  startWaterLevelMillis = millis();
+  startBuzzerAlarmMillis = millis();
+  /*
   sensors.begin(); // Start up the library
+  */
 }
 
 
@@ -87,7 +87,57 @@ void setup(void){
 //////////////////////////   MAIN LOOP   ///////////////////////////
 ////////////////////////////////////////////////////////////////////
 void loop(void){
-  
+  currentMillis = millis();
+  waterLevel();
+  buzzerAlarm();
+}
+
+
+void waterLevel(void){
+  if (currentMillis - startWaterLevelMillis >= waterLevelPeriod){  
+    // 200 ms
+    ////////// WATER LEVEL //////////
+    int distance_perc; // distance declaration (in %)
+    float water_level_sum = 0; // sum declaration
+    for (int i=0 ; i<5 ; i++){ // 5 samples are taken
+      digitalWrite(water_level_trig_pin, LOW); // Clears the water_level_trig_pin condition first
+      delayMicroseconds(2);
+      digitalWrite(water_level_trig_pin, HIGH); // Sets the water_level_trig_pin HIGH (ACTIVE) for 10 microseconds (time for 8 cycle sonic bursts)
+      delayMicroseconds(10); 
+      digitalWrite(water_level_trig_pin, LOW);
+      duration = pulseIn(water_level_echo_pin, HIGH); // Reads the water_level_echo_pin, returns the sound wave travel time in microseconds
+      distance = duration * 0.034 / 2; // Speed of sound wave divided by 2 (go and back)
+      water_level_sum = water_level_sum + distance; // Sum calculation
+      delay(20);
+    }
+    av_dist = round(water_level_sum / 5.0); // one average value of distance in cm
+    distance_perc = map(av_dist, 2, 27, 0, 100); // one average value of distance in % | sensor's range starts from 2 cm (fixed)
+    Serial.print("\nDistance: "); // prints average of 5 samples in cm
+    Serial.print(av_dist);
+    Serial.print(" cm \n");
+    Serial.print("\nDistance in %: "); // prints average of 5 samples in %
+    Serial.print(distance_perc);
+    Serial.print(" % \n");
+    startWaterLevelMillis = currentMillis;
+  }
+}
+
+void buzzerAlarm(void){
+  if (currentMillis - startBuzzerAlarmMillis >= buzzerAlarmPeriod){ 
+    if (av_dist > 60){
+      Serial.print("FUCK: ");
+      Serial.println(av_dist);
+      tone(buzzer_pin, 100); //4000 in real life;
+    }
+    else{
+      noTone(buzzer_pin);
+    }
+    startBuzzerAlarmMillis = currentMillis;
+  }
+}
+
+
+/*
   ////////// WATER TEMPERATURE SENSOR //////////
   sensors.requestTemperatures();
   Serial.print("Water_temp (°C): ");
@@ -116,37 +166,8 @@ void loop(void){
   av_EC = EC_sum / 5; // average of 5 samples
   Serial.print("EC (uS): "); 
   Serial.println(av_EC);
+*/
 
-  ////////// WATER LEVEL //////////
-  int distance_perc; // distance declaration (in %)
-  float water_level_sum = 0; // sum declaration
-  int av_dist = 0; // average distance declaration (in cm)
-  for (int i=0 ; i<5 ; i++){ // 5 samples are taken
-    digitalWrite(water_level_trig_pin, LOW); // Clears the water_level_trig_pin condition first
-    delayMicroseconds(2);
-    digitalWrite(water_level_trig_pin, HIGH); // Sets the water_level_trig_pin HIGH (ACTIVE) for 10 microseconds (time for 8 cycle sonic bursts)
-    delayMicroseconds(10); 
-    digitalWrite(water_level_trig_pin, LOW);
-    duration = pulseIn(water_level_echo_pin, HIGH); // Reads the water_level_echo_pin, returns the sound wave travel time in microseconds
-    distance = duration * 0.034 / 2; // Speed of sound wave divided by 2 (go and back)
-    water_level_sum = water_level_sum + distance; // Sum calculation
-    delay(20);
-  }
-  av_dist = round(water_level_sum / 5.0); // one average value of distance in cm
-  distance_perc = map(av_dist, 2, 27, 0, 100); // one average value of distance in % | sensor's range starts from 2 cm (fixed)
-  Serial.print("\nDistance: "); // prints average of 5 samples in cm
-  Serial.print(av_dist);
-  Serial.print(" cm \n");
-  Serial.print("\nDistance in %: "); // prints average of 5 samples in %
-  Serial.print(distance_perc);
-  Serial.print(" % \n");
-
-  ////////// BUZZER //////////
-  tone(buzzer_pin, 400); //4000 in real life
-  delay(500);
-  noTone(buzzer_pin);
-  delay(500);
-}
 
 ////////////////////////////////////////////////////////////////////
 /////////////////////////   REFERENCES   /////////////////////////// 
