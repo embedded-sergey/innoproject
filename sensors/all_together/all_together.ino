@@ -39,7 +39,7 @@ unsigned long startWaterLevelMillis;
 unsigned long startBuzzerAlarmMillis;
 unsigned long currentMillis;
 const unsigned long waterLevelPeriod = 1000;
-const unsigned long buzzerAlarmPeriod = 500;
+const unsigned long buzzerAlarmPeriod = 1000;
 
 ////////////////////////////////////////////////////////////////////
 /////////////////////   SENSOR CONFIGURATIONS   ////////////////////
@@ -49,6 +49,7 @@ const unsigned long buzzerAlarmPeriod = 500;
 long duration;
 int distance;
 int av_dist;
+int water_level;
 /*
 ////////// WATER TEMPERATURE //////////
 // Setup a oneWire instance to communicate with any OneWire devices
@@ -69,7 +70,9 @@ const float a = 0.020;
 //////////////////////////   SET-UP LOOP   /////////////////////////
 ////////////////////////////////////////////////////////////////////
 void setup(void){
-  //pinMode(RELAY_0, OUTPUT);
+  pinMode(water_rack_pump_1_pin, OUTPUT);
+  pinMode(water_rack_pump_2_pin, OUTPUT);
+  pinMode(water_heater_pin, OUTPUT);
   pinMode(water_level_trig_pin, OUTPUT);
   pinMode(water_level_echo_pin, INPUT);
   Serial.begin(9600);
@@ -89,7 +92,8 @@ void setup(void){
 void loop(void){
   currentMillis = millis();
   waterLevel();
-  buzzerAlarm();
+  lowWaterLevel();
+
 }
 
 
@@ -97,7 +101,6 @@ void waterLevel(void){
   if (currentMillis - startWaterLevelMillis >= waterLevelPeriod){  
     // 200 ms
     ////////// WATER LEVEL //////////
-    int distance_perc; // distance declaration (in %)
     float water_level_sum = 0; // sum declaration
     for (int i=0 ; i<5 ; i++){ // 5 samples are taken
       digitalWrite(water_level_trig_pin, LOW); // Clears the water_level_trig_pin condition first
@@ -111,30 +114,51 @@ void waterLevel(void){
       delay(20);
     }
     av_dist = round(water_level_sum / 5.0); // one average value of distance in cm
-    distance_perc = map(av_dist, 2, 27, 0, 100); // one average value of distance in % | sensor's range starts from 2 cm (fixed)
+    water_level = map(av_dist, 2, 27, 100, 0); // one average value of distance in % | sensor's range starts from 2 cm (fixed)
     Serial.print("\nDistance: "); // prints average of 5 samples in cm
     Serial.print(av_dist);
     Serial.print(" cm \n");
     Serial.print("\nDistance in %: "); // prints average of 5 samples in %
-    Serial.print(distance_perc);
+    Serial.print(water_level);
     Serial.print(" % \n");
     startWaterLevelMillis = currentMillis;
+
+//    if WATERLEVEL > ###, THEN:
+  
+    //pump
+    //heater
   }
 }
 
 void buzzerAlarm(void){
-  if (currentMillis - startBuzzerAlarmMillis >= buzzerAlarmPeriod){ 
-    if (av_dist > 60){
-      Serial.print("FUCK: ");
-      Serial.println(av_dist);
-      tone(buzzer_pin, 100); //4000 in real life;
-    }
-    else{
+  if(currentMillis - startBuzzerAlarmMillis < buzzerAlarmPeriod){
       noTone(buzzer_pin);
-    }
+  }
+  else if ((currentMillis - startBuzzerAlarmMillis >= buzzerAlarmPeriod) && (currentMillis - startBuzzerAlarmMillis <= (buzzerAlarmPeriod * 2))){
+      tone(buzzer_pin, 40); //4000 in real life;
+  }
+  else{
     startBuzzerAlarmMillis = currentMillis;
+    }
+}
+
+
+void lowWaterLevel(void){
+    if (water_level <= 20 || water_level >= 90){
+    digitalWrite(water_rack_pump_1_pin, LOW);
+    digitalWrite(water_rack_pump_2_pin, LOW);
+    digitalWrite(water_heater_pin, LOW);
+    buzzerAlarm(); // call method for pulsing alarm sound
+  }
+  else{
+    digitalWrite(water_rack_pump_1_pin, HIGH);
+    digitalWrite(water_rack_pump_2_pin, HIGH);
+    digitalWrite(water_heater_pin, HIGH);
+    noTone(buzzer_pin);
   }
 }
+
+
 
 
 /*
