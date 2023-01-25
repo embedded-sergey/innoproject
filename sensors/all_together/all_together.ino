@@ -37,9 +37,11 @@ const byte water_heater_pin = 24;        // Relay 2     R2
 ////////////////////////////////////////////////////////////////////
 unsigned long startWaterLevelMillis;
 unsigned long startBuzzerAlarmMillis;
+unsigned long startWaterTemperatureMillis;
 unsigned long currentMillis;
 const unsigned long waterLevelPeriod = 1000;
 const unsigned long buzzerAlarmPeriod = 1000;
+const unsigned long waterTemperaturePeriod = 1000;
 
 ////////////////////////////////////////////////////////////////////
 /////////////////////   SENSOR CONFIGURATIONS   ////////////////////
@@ -50,8 +52,9 @@ long duration;
 int distance;
 int av_dist;
 int water_level;
-/*
+
 ////////// WATER TEMPERATURE //////////
+float water_temperature;
 // Setup a oneWire instance to communicate with any OneWire devices
 OneWire oneWire(water_temp_pin);
 // Pass our oneWire reference to Dallas Temperature
@@ -59,7 +62,9 @@ DallasTemperature sensors(&oneWire);
 // Insert address (to get, see DS18B20_get_address):
 uint8_t water_temp_address[8] = { 0x28, 0x7F, 0x17, 0xAC, 0x13, 0x19, 0x01, 0x9A };
 
-////////// ELECTRIC CONDUCTIVITY //////////
+
+
+/*////////// ELECTRIC CONDUCTIVITY //////////
 // No calibration required for EC. The electrical conductivity of an aqueous
 // solution increases with temperature significantly: about 2 per Celsius
 const float a = 0.020;
@@ -80,6 +85,7 @@ void setup(void){
 
   startWaterLevelMillis = millis();
   startBuzzerAlarmMillis = millis();
+  startWaterTemperatureMillis = millis();
   /*
   sensors.begin(); // Start up the library
   */
@@ -92,8 +98,9 @@ void setup(void){
 void loop(void){
   currentMillis = millis();
   waterLevel();
-  lowWaterLevel();
-
+  controlWaterLevel();
+  waterTemperature();
+  controlHeater();
 }
 
 
@@ -122,11 +129,6 @@ void waterLevel(void){
     Serial.print(water_level);
     Serial.print(" % \n");
     startWaterLevelMillis = currentMillis;
-
-//    if WATERLEVEL > ###, THEN:
-  
-    //pump
-    //heater
   }
 }
 
@@ -143,7 +145,7 @@ void buzzerAlarm(void){
 }
 
 
-void lowWaterLevel(void){
+void controlWaterLevel(void){
     if (water_level <= 20 || water_level >= 90){
     digitalWrite(water_rack_pump_1_pin, LOW);
     digitalWrite(water_rack_pump_2_pin, LOW);
@@ -153,23 +155,46 @@ void lowWaterLevel(void){
   else{
     digitalWrite(water_rack_pump_1_pin, HIGH);
     digitalWrite(water_rack_pump_2_pin, HIGH);
-    digitalWrite(water_heater_pin, HIGH);
     noTone(buzzer_pin);
   }
 }
 
 
 
-
-/*
-  ////////// WATER TEMPERATURE SENSOR //////////
-  sensors.requestTemperatures();
-  Serial.print("Water_temp (°C): ");
-  float water_temp = sensors.getTempC(water_temp_address);
-  Serial.print(water_temp);
+ 
+////////// WATER TEMPERATURE SENSOR //////////
+ void waterTemperature(void){
+  if(currentMillis - startWaterTemperatureMillis >= waterTemperaturePeriod){
+    sensors.requestTemperatures();
+    Serial.print("Water temp (°C): ");
+    printTemperature(water_temp_address);
+    Serial.println();
+    startWaterTemperatureMillis = currentMillis;
+  }
+ }
+ 
+ void printTemperature(DeviceAddress deviceAddress){
+  water_temperature = sensors.getTempC(deviceAddress);
+  Serial.print(water_temperature);
   Serial.print("\t");
+}
 
-  ////////// ELECTRIC CONDUCTIVITY //////////
+ 
+
+void controlHeater(void){
+    if (water_temperature >= 24){
+    digitalWrite(water_heater_pin, LOW);
+  }
+  else{
+    digitalWrite(water_heater_pin, HIGH);
+  }
+}
+
+
+
+
+  
+ /* /////////// ELECTRIC CONDUCTIVITY //////////
   int TDS_raw; //int TEMP_raw for waterproof LM35;
   float Voltage;
   float TDS_25;
