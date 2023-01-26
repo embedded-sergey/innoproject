@@ -33,15 +33,22 @@ const byte water_rack_pump_2_pin = 23;   // Relay 1     R1
 const byte water_heater_pin = 24;        // Relay 2     R2
 
 ////////////////////////////////////////////////////////////////////
-///////////////////////// MILLIS VARAIBLES /////////////////////////
+///////////////////////// MILLIS VARIABLES /////////////////////////
 ////////////////////////////////////////////////////////////////////
-unsigned long startWaterLevelMillis;
-unsigned long startBuzzerAlarmMillis;
-unsigned long startWaterTemperatureMillis;
+
+unsigned long startWaterLevelMillis = millis();
+unsigned long startBuzzerAlarmMillis = millis();
+unsigned long startWaterTemperatureMillis = millis();
+unsigned long start_ph_millis = millis();
+unsigned long start_ec_millis = millis();
+
 unsigned long currentMillis;
+
 const unsigned long waterLevelPeriod = 1000;
 const unsigned long buzzerAlarmPeriod = 1000;
 const unsigned long waterTemperaturePeriod = 1000;
+const unsigned long ph_period = 1000;
+const unsigned long ec_period = 1000;
 
 ////////////////////////////////////////////////////////////////////
 /////////////////////   SENSOR CONFIGURATIONS   ////////////////////
@@ -62,18 +69,25 @@ DallasTemperature sensors(&oneWire);
 // Insert address (to get, see DS18B20_get_address):
 uint8_t water_temp_address[8] = { 0x28, 0x7F, 0x17, 0xAC, 0x13, 0x19, 0x01, 0x9A };
 
+//////////////////// PH SENSOR ///////////////////////
+const float Offset = 0.4;  //deviation compensate
+#define LED 10
+const int ArrayLength = 40;  //times of collection
+int pHArray[ArrayLength];  //Store the average value of the sensor feedback
+int pHArrayIndex=0;
 
-
-/*////////// ELECTRIC CONDUCTIVITY //////////
+/////////////// ELECTRIC CONDUCTIVITY ////////////////
 // No calibration required for EC. The electrical conductivity of an aqueous
 // solution increases with temperature significantly: about 2 per Celsius
 const float a = 0.020;
-*/
-
+//int TEMP_raw for waterproof LM35;
+float t = 25;
+float av_EC;
 
 ////////////////////////////////////////////////////////////////////
 //////////////////////////   SET-UP LOOP   /////////////////////////
 ////////////////////////////////////////////////////////////////////
+
 void setup(void){
   pinMode(water_rack_pump_1_pin, OUTPUT);
   pinMode(water_rack_pump_2_pin, OUTPUT);
@@ -81,14 +95,9 @@ void setup(void){
   pinMode(water_level_trig_pin, OUTPUT);
   pinMode(water_level_echo_pin, INPUT);
   Serial.begin(9600);
-  Serial.println("\nWater level sensor");
-
-  startWaterLevelMillis = millis();
-  startBuzzerAlarmMillis = millis();
-  startWaterTemperatureMillis = millis();
-  /*
   sensors.begin(); // Start up the library
-  */
+  
+  pinMode(LED,OUTPUT);
 }
 
 
@@ -101,6 +110,8 @@ void loop(void){
   controlWaterLevel();
   waterTemperature();
   controlHeater();
+  phLevel();
+  ecLevel();
 }
 
 
@@ -154,13 +165,10 @@ void controlWaterLevel(void){
   }
   else{
     digitalWrite(water_rack_pump_1_pin, HIGH);
-    digitalWrite(water_rack_pump_2_pin, HIGH);
+    digitalWrite(water_rack_pump_2_pin, HIGH);  
     noTone(buzzer_pin);
   }
 }
-
-
-
  
 ////////// WATER TEMPERATURE SENSOR //////////
  void waterTemperature(void){
@@ -179,8 +187,6 @@ void controlWaterLevel(void){
   Serial.print("\t");
 }
 
- 
-
 void controlHeater(void){
     if (water_temperature >= 24){
     digitalWrite(water_heater_pin, LOW);
@@ -192,31 +198,90 @@ void controlHeater(void){
 
 
 
-
-  
- /* /////////// ELECTRIC CONDUCTIVITY //////////
-  int TDS_raw; //int TEMP_raw for waterproof LM35;
-  float Voltage;
-  float TDS_25;
-  float EC_25;
-  float av_EC;
-  float EC;
-  float EC_sum = 0;
-  float t = 25; // VALUE FROM SENSOR!!!
-  for (int i=0 ; i<5; i++){
-    TDS_raw = analogRead(tds_sensor_pin);
-    Voltage = TDS_raw*5/1024.0; //Convert analog reading to Voltage
-    TDS_25=(133.42/Voltage*Voltage*Voltage - 255.86*Voltage*Voltage + 857.39*Voltage)*0.5; //Convert voltage value to TDS value (original)
-    EC_25 = TDS_25*2;
-    EC = (1 + a*(t - 25))*EC_25;
-    EC_sum = EC_sum + EC; //sum formula for the following average calculation
-    delay(10);
+void phLevel (void){
+  static unsigned long samplingTime = millis();
+  static unsigned long printTime = millis();
+  static float pHValue,pHvoltage;
+  if (currentMillis - start_ph_millis >  ph_period) //(millis()-samplingTime > samplingInterval)
+  {
+      pHArray[pHArrayIndex ++] = analogRead(ph_sensor_pin);
+      if(pHArrayIndex == ArrayLength){
+        pHArrayIndex = 0;
+      }
+      pHvoltage = avergearray(pHArray, ArrayLength) *5.0 / 1024;
+      pHValue = 3.5*pHvoltage+Offset;
+      Serial.print("pH Voltage:");
+      Serial.print(pHvoltage,2);
+      Serial.print("    pH value: ");
+      Serial.println(pHValue,2);
+      digitalWrite(LED,digitalRead(LED)^1);
+      start_ph_millis = currentMillis;
   }
-  av_EC = EC_sum / 5; // average of 5 samples
-  Serial.print("EC (uS): "); 
-  Serial.println(av_EC);
-*/
-
+}
+double avergearray(int* arr, int number){
+  int i;
+  int max,min;
+  double avg;
+  long amount=0;
+  if(number<=0){
+    Serial.println("Error number for the array to avraging!/n");
+    return 0;
+  }
+  if(number<5){   //less than 5, calculated directly statistics
+    for(i=0;i<number;i++){
+      amount+=arr[i];
+    }
+    avg = amount/number;
+    return avg;
+  }else{
+    if(arr[0]<arr[1]){
+      min = arr[0];max=arr[1];
+    }
+    else{
+      min=arr[1];max=arr[0];
+    }
+    for(i=2;i<number;i++){
+      if(arr[i]<min){
+        amount+=min;        //arr<min
+        min=arr[i];
+      }else {
+        if(arr[i]>max){
+          amount+=max;    //arr>max
+          max=arr[i];
+        }else{
+          amount+=arr[i]; //min<=arr<=max
+        }
+      }//if
+    }//for
+    avg = (double)amount/(number-2);
+  }//if
+  return avg;
+}
+  
+/////////// ELECTRIC CONDUCTIVITY //////////
+void ecLevel (void){
+  if (currentMillis - start_ec_millis >= ec_period){
+    int TDS_raw;
+    float voltage_EC;
+    float TDS_25;
+    float EC_25;
+    float EC_sum = 0;
+    float EC;
+    for (int i=0 ; i<5; i++){
+      TDS_raw = analogRead(tds_sensor_pin);
+      voltage_EC = TDS_raw*5/1024.0; //Convert analog reading to Voltage
+      TDS_25=(133.42/voltage_EC*voltage_EC*voltage_EC - 255.86*voltage_EC*voltage_EC + 857.39*voltage_EC)*0.5; //Convert voltage value to TDS value (original)
+      EC_25 = TDS_25*2;
+      EC = (1 + a*(t - 25))*EC_25;
+      EC_sum = EC_sum + EC; //sum formula for the following average calculation
+      delay(10);
+    }
+    av_EC = EC_sum / 5; // average of 5 samples
+    Serial.print("EC (uS): "); 
+    Serial.println(av_EC);
+    start_ec_millis = currentMillis;
+  }
+}
 
 ////////////////////////////////////////////////////////////////////
 /////////////////////////   REFERENCES   /////////////////////////// 
