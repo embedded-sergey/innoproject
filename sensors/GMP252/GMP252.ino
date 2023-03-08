@@ -105,7 +105,7 @@ void loop() {
         Serial.println("Slave device: Vaisala GMP252");
         Serial.print("Modbus address: ");
         Serial.println(SlaveModbusAdd, DEC); 
-        Serial.print("Humidity registers (lsb, msb): "); // lsb and msb - least and most significant bits
+        Serial.print("Carbon Dioxide registers (lsb, msb): "); // lsb and msb - least and most significant bits
         Serial.print(ModbusSlaveRegisters[0], HEX);
         Serial.print(", ");
         Serial.println(ModbusSlaveRegisters[1], HEX);
@@ -119,7 +119,7 @@ void loop() {
         unsigned long *GMP252_CO2_uint32;
         GMP252_CO2_uint32 = (unsigned long*)&GMP252_CO2;
         *GMP252_CO2_uint32 = (unsigned long)ModbusSlaveRegisters[1]<<16 | ModbusSlaveRegisters[0]; // Float - Mid-Little Endian CDAB
-        Serial.print("Carbon Dioxide (ppm): ");
+        Serial.print("CO2 (ppm): ");
         Serial.println(GMP252_CO2, 2);
 
         float GMP252_temperature;

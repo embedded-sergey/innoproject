@@ -6,8 +6,9 @@
 // Important note only address 0 is reserved for a Modbus master device!
 
 #define MasterModbusAdd 0  // Controllino Maxi
-#define SlaveModbusAdd_HMP60  240 // Vaisala probe HMP60
 #define SlaveModbusAdd_GMP252 239 // Vaisala probe GMP252
+#define SlaveModbusAdd_HMP60  240 // Vaisala probe HMP60
+
 
 // This MACRO defines number of the comport that is used for RS 485 interface.
 // For MAXI and MEGA RS485 is reserved UART Serial3.
@@ -136,7 +137,7 @@ void loop() {
         Serial.println("Slave device: Vaisala GMP252");
         Serial.print("Modbus address: ");
         Serial.println(SlaveModbusAdd_GMP252, DEC); 
-        Serial.print("Humidity registers (lsb, msb): "); // lsb and msb - least and most significant bits
+        Serial.print("Carbon Dioxide registers (lsb, msb): "); // lsb and msb - least and most significant bits
         Serial.print(ModbusSlaveRegisters[4], HEX);
         Serial.print(", ");
         Serial.println(ModbusSlaveRegisters[5], HEX);
@@ -145,12 +146,12 @@ void loop() {
         Serial.print(", ");
         Serial.println(ModbusSlaveRegisters[7], HEX);
         Serial.println("");
-        
+
         float GMP252_CO2;
         unsigned long *GMP252_CO2_uint32;
         GMP252_CO2_uint32 = (unsigned long*)&GMP252_CO2;
         *GMP252_CO2_uint32 = (unsigned long)ModbusSlaveRegisters[5]<<16 | ModbusSlaveRegisters[4]; // Float - Mid-Little Endian CDAB
-        Serial.print("Carbon Dioxide (ppm): ");
+        Serial.print("CO2 (ppm): ");
         Serial.println(GMP252_CO2, 2);
 
         float GMP252_temperature;

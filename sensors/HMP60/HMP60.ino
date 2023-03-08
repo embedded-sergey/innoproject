@@ -68,7 +68,7 @@ void setup() {
  
   WaitingTime = millis() + 1000;
   myState = 0;
-  currentQuery = 0; 
+  currentQuery = 0;
 }
 
 void loop() {

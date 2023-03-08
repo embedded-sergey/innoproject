@@ -179,7 +179,7 @@ void controlWaterLevel(void){
     Serial.println();
     startWaterTemperatureMillis = currentMillis;
   }
- }
+}
  
  void printTemperature(DeviceAddress deviceAddress){
   water_temperature = sensors.getTempC(deviceAddress);
