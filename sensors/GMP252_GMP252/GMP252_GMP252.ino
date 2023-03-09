@@ -4,7 +4,6 @@
 #define MasterModbusAdd 0  // Master is always 0, slaves: from 1 to 247
 #define SlaveModbusAdd_GMP252_1 239 // Vaisala probes GMP252 for test
 #define SlaveModbusAdd_GMP252_2 240 //  environments 1 & 2, respectively
-
 #define RS485Serial 3 // UART Serial3 for RS485 interface.
 
 Modbus ControllinoModbusMaster(MasterModbusAdd, RS485Serial, 0);  
@@ -13,8 +12,9 @@ modbus_t ModbusQuery[2]; // the number of queries to slave device(s)
 
 uint8_t myState; // machine state
 uint8_t currentQuery; // pointer to message query
-
 unsigned long WaitingTime;
+float GMP252_1_CO2;
+float GMP252_2_CO2;
 
 void setup() {
   Serial.begin(9600);
@@ -64,23 +64,22 @@ void loop() {
       WaitingTime = millis() + 1000; 
         
       if (currentQuery == 0){
-        float GMP252_1_CO2;
         unsigned long *GMP252_1_CO2_uint32;
         GMP252_1_CO2_uint32 = (unsigned long*)&GMP252_1_CO2;
         *GMP252_1_CO2_uint32 = (unsigned long)ModbusSlaveRegisters[1]<<16 | ModbusSlaveRegisters[0]; // Float - Mid-Little Endian CDAB
-        Serial.print("CO2 for environment 1 (ppm): ");
-        Serial.print(GMP252_1_CO2, 2);
-        Serial.print(";\t");
       }
          
       if (currentQuery == 1){
-        float GMP252_2_CO2;
         unsigned long *GMP252_2_CO2_uint32;
         GMP252_2_CO2_uint32 = (unsigned long*)&GMP252_2_CO2;
         *GMP252_2_CO2_uint32 = (unsigned long)ModbusSlaveRegisters[5]<<16 | ModbusSlaveRegisters[4]; // Float - Mid-Little Endian CDAB
-        Serial.print("CO2 for environment 2 (ppm): ");
-        Serial.println(GMP252_2_CO2, 2);
       }
+      
+      Serial.print("CO2_ppm_env_1: ");  
+      Serial.print(GMP252_1_CO2, 2);
+      Serial.print(";\t");
+      Serial.print("CO2_ppm_env_2: ");
+      Serial.println(GMP252_2_CO2, 2);
     }
     break;
   }
