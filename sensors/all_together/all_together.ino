@@ -4,9 +4,10 @@
 #include <Controllino.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include "ModbusRtu.h" 
 
 ////////////////////////////////////////////////////////////////////
-/////////////////////////   PINOUT MAP   /////////////////////////// 
+//////////////////////////   PINOUT MAP   ////////////////////////// 
 ////////////////////////////////////////////////////////////////////
 
 ////////// ANALOG //////////
@@ -22,8 +23,9 @@ const byte water_level_echo_pin = 6;     // Digital 4   X1
 const byte buzzer_pin = 7;               // Digital 5   X1
 
 ////////// INTERFACES //////////
-const byte raspi_tx_pin = 18;            // UART TX     X1
-const byte raspi_rx_pin = 19;            // UART RX     X1
+const byte raspi_serial = 1;             // UART1       USB
+const byte orp_sensor = 2;               // UART2       X1
+const byte modbus_serial = 3;            // UART3       RS485
 const byte orp_sda_pin = 20;             // I2C SDA     X1
 const byte orp_scl_pin = 21;             // I2C SCL     X1
 
@@ -33,7 +35,7 @@ const byte water_rack_pump_2_pin = 23;   // Relay 1     R1
 const byte water_heater_pin = 24;        // Relay 2     R2
 
 ////////////////////////////////////////////////////////////////////
-///////////////////////// MILLIS VARIABLES /////////////////////////
+///////////////////////   MILLIS VARIABLES   ///////////////////////
 ////////////////////////////////////////////////////////////////////
 
 unsigned long startWaterLevelMillis = millis();
@@ -71,7 +73,7 @@ uint8_t water_temp_address[8] = { 0x28, 0x7F, 0x17, 0xAC, 0x13, 0x19, 0x01, 0x9A
 
 //////////////////// PH SENSOR ///////////////////////
 const float Offset = 0.4;  //deviation compensate
-#define LED 10
+const byte LED = 10;
 const int ArrayLength = 40;  //times of collection
 int pHArray[ArrayLength];  //Store the average value of the sensor feedback
 int pHArrayIndex=0;
@@ -83,6 +85,23 @@ const float a = 0.020;
 //int TEMP_raw for waterproof LM35;
 float t = 25;
 float av_EC;
+
+////////////////////////////////////////////////////////////////////
+/////////////////////   MODBUS CONFIGURATIONS   ////////////////////
+////////////////////////////////////////////////////////////////////
+const byte MasterModbusAdd = 0;  // Master is always 0, slaves: from 1 to 247
+const byte SlaveModbusAdd_GMP252_1 = 239; // Vaisala probes GMP252 for test
+const byte SlaveModbusAdd_GMP252_2 = 240; //  environments 1 & 2, respectively
+
+Modbus ControllinoModbusMaster(MasterModbusAdd, modbus_serial, 0);  
+uint16_t ModbusSlaveRegisters[8];
+modbus_t ModbusQuery[2]; // the number of queries to slave device(s)
+
+uint8_t myState; // machine state
+uint8_t currentQuery; // pointer to message query
+unsigned long WaitingTime;
+float GMP252_1_CO2;
+float GMP252_2_CO2;
 
 ////////////////////////////////////////////////////////////////////
 //////////////////////////   SET-UP LOOP   /////////////////////////
@@ -99,6 +118,7 @@ void setup(void){
   
   pinMode(LED,OUTPUT);
 }
+
 
 
 ////////////////////////////////////////////////////////////////////
@@ -192,7 +212,7 @@ void controlHeater(void){
     digitalWrite(water_heater_pin, LOW);
   }
   else{
-    digitalWrite(water_heater_pin, HIGH);
+//  digitalWrite(water_heater_pin, HIGH);
   }
 }
 

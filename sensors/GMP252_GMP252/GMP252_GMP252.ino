@@ -4,7 +4,7 @@
 #define MasterModbusAdd 0  // Master is always 0, slaves: from 1 to 247
 #define SlaveModbusAdd_GMP252_1 239 // Vaisala probes GMP252 for test
 #define SlaveModbusAdd_GMP252_2 240 //  environments 1 & 2, respectively
-#define RS485Serial 3 // UART Serial3 for RS485 interface.
+const byte RS485Serial = 3; // UART Serial3 for RS485 interface.
 
 Modbus ControllinoModbusMaster(MasterModbusAdd, RS485Serial, 0);  
 uint16_t ModbusSlaveRegisters[8];
