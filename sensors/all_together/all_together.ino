@@ -113,10 +113,34 @@ void setup(void){
   pinMode(water_heater_pin, OUTPUT);
   pinMode(water_level_trig_pin, OUTPUT);
   pinMode(water_level_echo_pin, INPUT);
+  pinMode(LED,OUTPUT);
+  
   Serial.begin(9600);
   sensors.begin(); // Start up the library
+  ControllinoModbusMaster.begin(19200, SERIAL_8N2); // 
+  ControllinoModbusMaster.setTimeOut( 5000 ); // if there is no answer in 5000 ms, roll over
   
-  pinMode(LED,OUTPUT);
+  // ModbusQuery 0: read registers from GMP252_1
+  ModbusQuery[0].u8id = SlaveModbusAdd_GMP252_1; // slave address
+  ModbusQuery[0].u8fct = 3; // function code (this one is registers read)
+  ModbusQuery[0].u16RegAdd = 0; // start address in slave
+  ModbusQuery[0].u16CoilsNo = 4; // number of elements (coils or registers) to read
+  ModbusQuery[0].au16reg = ModbusSlaveRegisters; // pointer to a memory array in the CONTROLLINO
+
+  // ModbusQuery 1: read registers from GMP252_2
+  ModbusQuery[1].u8id = SlaveModbusAdd_GMP252_2; // slave address
+  ModbusQuery[1].u8fct = 3; // function code (this one is registers read)
+  ModbusQuery[1].u16RegAdd = 0; // start address in slave
+  ModbusQuery[1].u16CoilsNo = 4; // number of elements (coils or registers) to read
+  ModbusQuery[1].au16reg = ModbusSlaveRegisters+4; // pointer to a memory array in the CONTROLLINO
+
+  // Serial configurations of ModbusRTU: baud-rate, data bits, parity, stop bits 
+  ControllinoModbusMaster.begin(19200, SERIAL_8N2); // 
+  ControllinoModbusMaster.setTimeOut( 5000 ); // if there is no answer in 5000 ms, roll over
+ 
+  WaitingTime = millis() + 1000;
+  myState = 0;
+  currentQuery = 0; 
 }
 
 
