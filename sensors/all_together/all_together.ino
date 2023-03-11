@@ -43,14 +43,16 @@ unsigned long startBuzzerAlarmMillis = millis();
 unsigned long startWaterTemperatureMillis = millis();
 unsigned long start_ph_millis = millis();
 unsigned long start_ec_millis = millis();
+unsigned long start_co2_millis = millis();
 
 unsigned long currentMillis;
 
-const unsigned long waterLevelPeriod = 1000;
+const unsigned long waterLevelPeriod = 10000;
 const unsigned long buzzerAlarmPeriod = 1000;
 const unsigned long waterTemperaturePeriod = 1000;
 const unsigned long ph_period = 1000;
 const unsigned long ec_period = 1000;
+const unsigned long co2_period = 1000;
 
 ////////////////////////////////////////////////////////////////////
 /////////////////////   SENSOR CONFIGURATIONS   ////////////////////
@@ -119,7 +121,7 @@ void setup(void){
   sensors.begin(); // Start up the library
   ControllinoModbusMaster.begin(19200, SERIAL_8N2); // 
   ControllinoModbusMaster.setTimeOut( 5000 ); // if there is no answer in 5000 ms, roll over
-  
+
   // ModbusQuery 0: read registers from GMP252_1
   ModbusQuery[0].u8id = SlaveModbusAdd_GMP252_1; // slave address
   ModbusQuery[0].u8fct = 3; // function code (this one is registers read)
@@ -156,13 +158,12 @@ void loop(void){
   controlHeater();
   phLevel();
   ecLevel();
+  co2Level();
 }
-
 
 void waterLevel(void){
   if (currentMillis - startWaterLevelMillis >= waterLevelPeriod){  
     // 200 ms
-    ////////// WATER LEVEL //////////
     float water_level_sum = 0; // sum declaration
     for (int i=0 ; i<5 ; i++){ // 5 samples are taken
       digitalWrite(water_level_trig_pin, LOW); // Clears the water_level_trig_pin condition first
@@ -187,21 +188,8 @@ void waterLevel(void){
   }
 }
 
-void buzzerAlarm(void){
-  if(currentMillis - startBuzzerAlarmMillis < buzzerAlarmPeriod){
-      noTone(buzzer_pin);
-  }
-  else if ((currentMillis - startBuzzerAlarmMillis >= buzzerAlarmPeriod) && (currentMillis - startBuzzerAlarmMillis <= (buzzerAlarmPeriod * 2))){
-      tone(buzzer_pin, 40); //4000 in real life;
-  }
-  else{
-    startBuzzerAlarmMillis = currentMillis;
-    }
-}
-
-
 void controlWaterLevel(void){
-    if (water_level <= 20 || water_level >= 90){
+  if (water_level <= 20 || water_level >= 90){
     digitalWrite(water_rack_pump_1_pin, LOW);
     digitalWrite(water_rack_pump_2_pin, LOW);
     digitalWrite(water_heater_pin, LOW);
@@ -212,6 +200,18 @@ void controlWaterLevel(void){
     digitalWrite(water_rack_pump_2_pin, HIGH);  
     noTone(buzzer_pin);
   }
+}
+
+void buzzerAlarm(void){
+  if(currentMillis - startBuzzerAlarmMillis < buzzerAlarmPeriod){
+      noTone(buzzer_pin);
+  }
+  else if ((currentMillis - startBuzzerAlarmMillis >= buzzerAlarmPeriod) && (currentMillis - startBuzzerAlarmMillis <= (buzzerAlarmPeriod * 2))){
+      tone(buzzer_pin, 40); //4000 in real life;
+  }
+  else{
+    startBuzzerAlarmMillis = currentMillis;
+    }
 }
  
 ////////// WATER TEMPERATURE SENSOR //////////
@@ -224,7 +224,7 @@ void controlWaterLevel(void){
     startWaterTemperatureMillis = currentMillis;
   }
 }
- 
+
  void printTemperature(DeviceAddress deviceAddress){
   water_temperature = sensors.getTempC(deviceAddress);
   Serial.print(water_temperature);
@@ -240,8 +240,7 @@ void controlHeater(void){
   }
 }
 
-
-
+/////////// ELECTRIC CONDUCTIVITY //////////
 void phLevel (void){
   static unsigned long samplingTime = millis();
   static unsigned long printTime = millis();
@@ -326,6 +325,63 @@ void ecLevel (void){
     start_ec_millis = currentMillis;
   }
 }
+
+/////////// CO2 VAISALA PROBES //////////
+void co2Level(void){
+  if (currentMillis - start_co2_millis >= co2_period){  
+    switch( myState ) {
+      case 0: 
+      if (millis() > WaitingTime) myState++; // wait state
+      break;
+      
+      case 1: 
+      ControllinoModbusMaster.query( ModbusQuery[currentQuery] ); // send query (only once)
+      myState++;
+      currentQuery++;
+      if (currentQuery == 2) {
+        currentQuery = 0;
+      }
+      break;
+      
+      case 2:
+      ControllinoModbusMaster.poll(); // check incoming messages
+      if (ControllinoModbusMaster.getState() == COM_IDLE){   // response from the slave was received
+        myState = 0;
+        WaitingTime = millis() + 1000; 
+          
+        if (currentQuery == 0){
+          unsigned long *GMP252_1_CO2_uint32;
+          GMP252_1_CO2_uint32 = (unsigned long*)&GMP252_1_CO2;
+          *GMP252_1_CO2_uint32 = (unsigned long)ModbusSlaveRegisters[1]<<16 | ModbusSlaveRegisters[0]; // Float - Mid-Little Endian CDAB
+        }
+           
+        if (currentQuery == 1){
+          unsigned long *GMP252_2_CO2_uint32;
+          GMP252_2_CO2_uint32 = (unsigned long*)&GMP252_2_CO2;
+          *GMP252_2_CO2_uint32 = (unsigned long)ModbusSlaveRegisters[5]<<16 | ModbusSlaveRegisters[4]; // Float - Mid-Little Endian CDAB
+        }
+        
+        Serial.print("CO2_ppm_env_1: ");  
+        Serial.print(GMP252_1_CO2, 2);
+        Serial.print(";\t");
+        Serial.print("CO2_ppm_env_2: ");
+        Serial.println(GMP252_2_CO2, 2);
+      }
+      break;
+    }
+  start_ec_millis = currentMillis;
+  }
+}
+
+// Tasks
+
+// 0      currentMillis = millis();
+//        water_level();
+//
+// 1000   
+// 
+
+
 
 ////////////////////////////////////////////////////////////////////
 /////////////////////////   REFERENCES   /////////////////////////// 
