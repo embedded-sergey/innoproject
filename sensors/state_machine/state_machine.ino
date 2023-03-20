@@ -53,7 +53,7 @@ unsigned long start_ec_millis = millis();
 unsigned long start_print_all_millis = millis();
 
 unsigned long currentMillis;
-
+/*
 const unsigned long co2_period = 0;
 const unsigned long water_level_period = 6000;
 const unsigned long buzzer_alarm_period = 6500;
@@ -61,7 +61,7 @@ const unsigned long water_temperature_period = 7000;
 const unsigned long ph_period = 8000;
 const unsigned long ec_period = 9000;
 const unsigned long print_all_period = 10000;
-
+*/
 
 
 ////////////////////////////////////////////////////////////////////
@@ -155,7 +155,7 @@ void setup(void){
   ControllinoModbusMaster.begin(19200, SERIAL_8N2); // 
   ControllinoModbusMaster.setTimeOut( 5000 ); // if there is no answer in 5000 ms, roll over
  
-  WaitingTime = millis();
+  WaitingTime = millis() + 1000;
   myState = 0;
   currentQuery = 0; 
 }
@@ -168,6 +168,9 @@ void setup(void){
 
 void loop(void){
   stateMachine();
+  // In spare time, the system is able to catch some triggers/events.
+  // add event #1: receiving Raspberry Pi calls
+  // add event #2: waiting for a button action (optionally)
   }
 
 
@@ -206,6 +209,49 @@ const unsigned long print_all_period = 10000;
 */
 
 
+void co2Level(void){
+  switch( myState ) {
+    case 0: 
+    if (millis() > WaitingTime) myState++; // wait state
+    break;
+    
+    case 1: 
+    ControllinoModbusMaster.query( ModbusQuery[currentQuery] ); // send query (only once)
+    myState++;
+    currentQuery++;
+    if (currentQuery == 2) {
+      currentQuery = 0;
+    }
+    break;
+    
+    case 2:
+    ControllinoModbusMaster.poll(); // check incoming messages
+    if (ControllinoModbusMaster.getState() == COM_IDLE){   // response from the slave was received
+      myState = 0;
+      WaitingTime = millis() + 1000; 
+        
+      if (currentQuery == 0){
+        unsigned long *GMP252_1_CO2_uint32;
+        GMP252_1_CO2_uint32 = (unsigned long*)&GMP252_1_CO2;
+        *GMP252_1_CO2_uint32 = (unsigned long)ModbusSlaveRegisters[1]<<16 | ModbusSlaveRegisters[0]; // Float - Mid-Little Endian CDAB
+      }
+         
+      if (currentQuery == 1){
+        unsigned long *GMP252_2_CO2_uint32;
+        GMP252_2_CO2_uint32 = (unsigned long*)&GMP252_2_CO2;
+        *GMP252_2_CO2_uint32 = (unsigned long)ModbusSlaveRegisters[5]<<16 | ModbusSlaveRegisters[4]; // Float - Mid-Little Endian CDAB
+      }
+      
+      Serial.print("CO2_ppm_env_1: ");  
+      Serial.print(GMP252_1_CO2, 2);
+      Serial.print(";\t");
+      Serial.print("CO2_ppm_env_2: ");
+      Serial.println(GMP252_2_CO2, 2);
+    }
+    break;
+  }
+}
+
 void waterLevel(void){
     // 200 ms
     float water_level_sum = 0; // sum declaration
@@ -215,17 +261,19 @@ void waterLevel(void){
       digitalWrite(water_level_trig_pin, HIGH); // Sets the water_level_trig_pin HIGH (ACTIVE) for 10 microseconds (time for 8 cycle sonic bursts)
       delayMicroseconds(10); 
       digitalWrite(water_level_trig_pin, LOW);
-      duration = pulseIn(water_level_echo_pin, HIGH, 200); // Reads the water_level_echo_pin, returns the sound wave travel time in microseconds
+      duration = pulseIn(water_level_echo_pin, HIGH, 100); // Reads the water_level_echo_pin, returns the sound wave travel time in microseconds
       distance = duration * 0.034 / 2; // Speed of sound wave divided by 2 (go and back)
       water_level_sum = water_level_sum + distance; // Sum calculation
       delay(20);
     }
     av_dist = round(water_level_sum / 5.0); // one average value of distance in cm
     water_level = map(av_dist, 2, 27, 100, 0); // one average value of distance in % | sensor's range starts from 2 cm (fixed)
-/*    Serial.print("Distance in cm: "); // prints average of 5 samples in cm
+    delay(500);
+    Serial.print("Distance in cm: "); // prints average of 5 samples in cm
     Serial.print(av_dist);
-    Serial.println("\t Distance in %: "); // prints average of 5 samples in %
-    */
+    Serial.print("\t Distance in %: "); // prints average of 5 samples in %
+    Serial.println(water_level); 
+
 }
 
 
@@ -251,20 +299,20 @@ void buzzerAlarm(void){
 
 void stateMachine() {
     static unsigned long start_machine = millis();
-    const unsigned long idle_period = 1000;
-    const unsigned long water_level_period = 2000;
-    const unsigned long emergency_period = 3000;
-
-    // Timer for notification process has completed
-    static unsigned long beepMillis;
+    // first 1000 ms are reserved for the last state processing
+    static unsigned long start_idle = 1000;
+    static unsigned long start_co2 = 2000;
+    static unsigned long start_water_level = 4000;
+    static unsigned long start_emergency = 6000;
 
     // Declare the states in meaningful English. Enums start enumerating
     // at zero, incrementing in steps of 1 unless overridden. We use an
     // enum 'class' here for type safety and code readability
     enum class controllinoState : uint8_t {
         IDLE,  // defaults to 0
-        WATERLEVEL,//RESET    // defaults to 1
-        EMERGENCY,   // defaults to 2
+        CO2,
+        WATERLEVEL,//RESET   
+        EMERGENCY,   // defaults to 3
     };
 
     // Keep track of the current State (it's an controllinoState variable)
@@ -272,36 +320,42 @@ void stateMachine() {
 
     // Process according to our State Diagram
     switch (currentState) {
-        case controllinoState::IDLE:
-            // idling for 1000ms
-            if (millis() - start_machine >= idle_period) {
-                displayState("IDLE state");
-                currentState = controllinoState::WATERLEVEL;
+        case controllinoState::IDLE:  
+            // idling for 1000ms     
+            if (millis() - start_machine >= start_idle) {
+                displayState("IDLE state"); 
+                currentState = controllinoState::CO2;
             }
             break;
 
-        // Someone pushed the 'call elevator' button - an input
-        case controllinoState::WATERLEVEL:
+        case controllinoState::CO2:  
+            if (millis() - start_machine >= start_co2) {
+                  displayState("CO2 state");   
+                  co2Level(); // another state machine
+                  // Thus, set up additional time control for MODBUS calls:
+                  if (millis() - start_machine >= start_water_level*0.9){
+                    currentState = controllinoState::WATERLEVEL;
+                  }
+            }
+            break;
 
-           
-            if (millis() - start_machine >= water_level_period) {
+        case controllinoState::WATERLEVEL:
+            if (millis() - start_machine >= start_water_level) {
                 displayState("WATERLEVEL state");
-                waterLevel();
+                waterLevel();            
                 // Move to next state
                 currentState = controllinoState::EMERGENCY;
             }
             break;
 
-        // Elevator has EMERGENCY
         case controllinoState::EMERGENCY:
-
-
-            if (millis() - start_machine >= (emergency_period)) {
+            if (millis() - start_machine >= (start_emergency)) {
                 displayState("EMERGENCY State");
                 controlWaterLevel();
                 // Move to next state
                 currentState = controllinoState::IDLE;
-                start_machine = millis();
+
+                start_machine = millis(); // Comment this line to remove scheduling 
             }
             
             break;
@@ -323,93 +377,6 @@ void displayState(String currentState){
 
 
 /*
-
-
-void co2Level(void){
-  if (currentMillis - start_co2_millis >= co2_period){  
-    switch( myState ) {
-      case 0: 
-      if (millis() > WaitingTime) myState++; // wait state
-      break;
-      
-      case 1: 
-      ControllinoModbusMaster.query( ModbusQuery[currentQuery] ); // send query (only once)
-      myState++;
-      currentQuery++;
-      if (currentQuery == 2) {
-        currentQuery = 0;
-      }
-      break;
-      
-      case 2:
-      ControllinoModbusMaster.poll(); // check incoming messages
-      if (ControllinoModbusMaster.getState() == COM_IDLE){   // response from the slave was received
-        myState = 0;
-        WaitingTime = millis() + 500; 
-          
-        if (currentQuery == 0){
-          unsigned long *GMP252_1_CO2_uint32;
-          GMP252_1_CO2_uint32 = (unsigned long*)&GMP252_1_CO2;
-          *GMP252_1_CO2_uint32 = (unsigned long)ModbusSlaveRegisters[1]<<16 | ModbusSlaveRegisters[0]; // Float - Mid-Little Endian CDAB
-        }
-           
-        if (currentQuery == 1){
-          unsigned long *GMP252_2_CO2_uint32;
-          GMP252_2_CO2_uint32 = (unsigned long*)&GMP252_2_CO2;
-          *GMP252_2_CO2_uint32 = (unsigned long)ModbusSlaveRegisters[5]<<16 | ModbusSlaveRegisters[4]; // Float - Mid-Little Endian CDAB
-        }
-        
-        Serial.print("CO2_ppm_env_1: ");  
-        Serial.print(GMP252_1_CO2, 2);
-        Serial.print(";\t");
-        Serial.print("CO2_ppm_env_2: ");
-        Serial.println(GMP252_2_CO2, 2);
-      }
-      break;
-    }
-  }
-}
-
-void waterLevel(void){
-  if (currentMillis - start_water_level_millis >= water_level_period){  
-    // 200 ms
-    float water_level_sum = 0; // sum declaration
-    for (int i=0 ; i<5 ; i++){ // 5 samples are taken
-      digitalWrite(water_level_trig_pin, LOW); // Clears the water_level_trig_pin condition first
-      delayMicroseconds(2);
-      digitalWrite(water_level_trig_pin, HIGH); // Sets the water_level_trig_pin HIGH (ACTIVE) for 10 microseconds (time for 8 cycle sonic bursts)
-      delayMicroseconds(10); 
-      digitalWrite(water_level_trig_pin, LOW);
-      duration = pulseIn(water_level_echo_pin, HIGH); // Reads the water_level_echo_pin, returns the sound wave travel time in microseconds
-      distance = duration * 0.034 / 2; // Speed of sound wave divided by 2 (go and back)
-      water_level_sum = water_level_sum + distance; // Sum calculation
-      delay(20);
-    }
-    av_dist = round(water_level_sum / 5.0); // one average value of distance in cm
-    water_level = map(av_dist, 2, 27, 100, 0); // one average value of distance in % | sensor's range starts from 2 cm (fixed)
-    Serial.print("\nDistance: "); // prints average of 5 samples in cm
-    Serial.print(av_dist);
-    Serial.print(" cm \n");
-    Serial.print("\nDistance in %: "); // prints average of 5 samples in %
-    Serial.print(water_level);
-    Serial.print(" % \n");
-  }
-}
-
-void controlWaterLevel(void){
-  if (water_level <= 20 || water_level >= 90){
-    digitalWrite(water_rack_pump_1_pin, LOW);
-    digitalWrite(water_rack_pump_2_pin, LOW);
-    digitalWrite(water_heater_pin, LOW);
-    buzzerAlarm(); // call method for pulsing alarm sound
-  }
-  else{
-    digitalWrite(water_rack_pump_1_pin, HIGH);
-    digitalWrite(water_rack_pump_2_pin, HIGH);  
-    noTone(buzzer_pin);
-  }
-}
-
 void buzzerAlarm(void){
   if(currentMillis - start_buzzer_alarm_millis < buzzer_alarm_period){
       noTone(buzzer_pin);
