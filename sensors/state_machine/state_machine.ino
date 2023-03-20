@@ -6,10 +6,6 @@
 #include <DallasTemperature.h>
 #include "ModbusRtu.h" 
 
-// Forward declaration of all functions
-void stateMachine();
-void displayState(String currentState);
-
 ////////////////////////////////////////////////////////////////////
 //////////////////////////   PINOUT MAP   ////////////////////////// 
 ////////////////////////////////////////////////////////////////////
@@ -38,30 +34,6 @@ const byte water_rack_pump_1_pin = 22;   // Relay 0     R0
 const byte water_rack_pump_2_pin = 23;   // Relay 1     R1
 const byte water_heater_pin = 24;        // Relay 2     R2
 
-
-
-////////////////////////////////////////////////////////////////////
-///////////////////////   MILLIS VARIABLES   ///////////////////////
-////////////////////////////////////////////////////////////////////
-
-unsigned long start_co2_millis = millis();
-unsigned long start_water_level_millis = millis();
-unsigned long start_buzzer_alarm_millis = millis();
-unsigned long start_water_temperature_millis = millis();
-unsigned long start_ph_millis = millis();
-unsigned long start_ec_millis = millis();
-unsigned long start_print_all_millis = millis();
-
-unsigned long currentMillis;
-/*
-const unsigned long co2_period = 0;
-const unsigned long water_level_period = 6000;
-const unsigned long buzzer_alarm_period = 6500;
-const unsigned long water_temperature_period = 7000;
-const unsigned long ph_period = 8000;
-const unsigned long ec_period = 9000;
-const unsigned long print_all_period = 10000;
-*/
 
 
 ////////////////////////////////////////////////////////////////////
@@ -167,46 +139,98 @@ void setup(void){
 ////////////////////////////////////////////////////////////////////
 
 void loop(void){
-  stateMachine();
-  // In spare time, the system is able to catch some triggers/events.
-  // add event #1: receiving Raspberry Pi calls
-  // add event #2: waiting for a button action (optionally)
+  stateMachine(); // if not busy, waiting for triggers/events.
   }
 
 
+void stateMachine() {
+    static unsigned long start_machine = millis();
+    // first 1000 ms are reserved for the last state processing
+    static unsigned long start_idle = 1000;
+    static unsigned long start_co2 = 2000; // 1000 ms per probe
+    static unsigned long start_fans = 4000; 
+    static unsigned long start_orp = 5000;
+    static unsigned long start_ec = 6000;
+    static unsigned long start_ec_pumps = 7000;
+    static unsigned long start_ph = 8000;
+    static unsigned long start_ph_pumps = 9000;
+    static unsigned long start_water_temperature = 10000;
+    static unsigned long start_heater = 11000;
+    static unsigned long start_water_level = 12000;  
+    static unsigned long start_emergency = 13000;
+    static unsigned long start_sd_rtc = 14000;
+    static unsigned long start_to_raspi = 15000;
+    
+    // Declare the states in meaningful English. Enums start enumerating
+    // at zero, incrementing in steps of 1 unless overridden. We use an
+    // enum 'class' here for type safety and code readability
+    enum class controllinoState : uint8_t {
+        IDLE,  // defaults to 0
+        CO2,
+        WATERLEVEL,
+        EMERGENCY,   // defaults to 3
+    };
+
+    // Keep track of the current State (it's an controllinoState variable)
+    static controllinoState currentState = controllinoState::IDLE;
+
+    // Process according to our State Diagram
+    switch (currentState) {
+        case controllinoState::IDLE:  
+            // idling for 1000ms     
+            if (millis() - start_machine >= start_idle) {
+                displayState("IDLE state"); 
+                currentState = controllinoState::CO2;
+            }
+            break;
+
+        case controllinoState::CO2:  
+            if (millis() - start_machine >= start_co2) {
+                  displayState("CO2 state");   
+                  co2Level(); // another state machine
+                  // Thus, set up additional time control for MODBUS calls:
+                  if (millis() - start_machine >= start_fans*0.9){
+                    currentState = controllinoState::WATERLEVEL;
+                  }
+            }
+            break;
+
+        case controllinoState::WATERLEVEL:
+            if (millis() - start_machine >= start_water_level) {
+                displayState("WATERLEVEL state");
+                waterLevel();            
+                // Move to next state
+                currentState = controllinoState::EMERGENCY;
+            }
+            break;
+
+        case controllinoState::EMERGENCY:
+            if (millis() - start_machine >= (start_emergency)) {
+                displayState("EMERGENCY State");
+                controlWaterLevel();
+                // Move to next state
+                currentState = controllinoState::IDLE;
+
+                start_machine = millis(); // Comment this line to remove scheduling 
+            }
+            
+            break;
+
+        default:
+            // Nothing to do here
+            Serial.println("'Default' Switch Case reached - Error");
+    }
+}
 
 
-  
-/* 
-  co2Level();
-  waterLevel();
-  controlWaterLevel();
-  waterTemperature();
-  controlHeater();
-  phLevel();
-  ecLevel();
-  printAll();
+void displayState(String currentState){
+    static String prevState = "";
 
-
-
-unsigned long start_co2_millis = millis();
-unsigned long start_water_level_millis = millis();
-unsigned long start_buzzer_alarm_millis = millis();
-unsigned long start_water_temperature_millis = millis();
-unsigned long start_ph_millis = millis();
-unsigned long start_ec_millis = millis();
-unsigned long start_print_all_millis = millis();
-
-unsigned long currentMillis;
-
-const unsigned long co2_period = 0;
-const unsigned long water_level_period = 6000;
-const unsigned long buzzer_alarm_period = 6500;
-const unsigned long water_temperature_period = 7000;
-const unsigned long ph_period = 8000;
-const unsigned long ec_period = 9000;
-const unsigned long print_all_period = 10000;
-*/
+    if (currentState != prevState) {
+        Serial.println(currentState);
+        prevState = currentState;
+    }
+}
 
 
 void co2Level(void){
@@ -252,6 +276,7 @@ void co2Level(void){
   }
 }
 
+
 void waterLevel(void){
     // 200 ms
     float water_level_sum = 0; // sum declaration
@@ -268,12 +293,10 @@ void waterLevel(void){
     }
     av_dist = round(water_level_sum / 5.0); // one average value of distance in cm
     water_level = map(av_dist, 2, 27, 100, 0); // one average value of distance in % | sensor's range starts from 2 cm (fixed)
-    delay(500);
     Serial.print("Distance in cm: "); // prints average of 5 samples in cm
     Serial.print(av_dist);
     Serial.print("\t Distance in %: "); // prints average of 5 samples in %
     Serial.println(water_level); 
-
 }
 
 
@@ -293,86 +316,6 @@ void controlWaterLevel(void){
 
 void buzzerAlarm(void){
       tone(buzzer_pin, 40); //4000 in real life;
-}
-
-
-
-void stateMachine() {
-    static unsigned long start_machine = millis();
-    // first 1000 ms are reserved for the last state processing
-    static unsigned long start_idle = 1000;
-    static unsigned long start_co2 = 2000;
-    static unsigned long start_water_level = 4000;
-    static unsigned long start_emergency = 6000;
-
-    // Declare the states in meaningful English. Enums start enumerating
-    // at zero, incrementing in steps of 1 unless overridden. We use an
-    // enum 'class' here for type safety and code readability
-    enum class controllinoState : uint8_t {
-        IDLE,  // defaults to 0
-        CO2,
-        WATERLEVEL,//RESET   
-        EMERGENCY,   // defaults to 3
-    };
-
-    // Keep track of the current State (it's an controllinoState variable)
-    static controllinoState currentState = controllinoState::IDLE;
-
-    // Process according to our State Diagram
-    switch (currentState) {
-        case controllinoState::IDLE:  
-            // idling for 1000ms     
-            if (millis() - start_machine >= start_idle) {
-                displayState("IDLE state"); 
-                currentState = controllinoState::CO2;
-            }
-            break;
-
-        case controllinoState::CO2:  
-            if (millis() - start_machine >= start_co2) {
-                  displayState("CO2 state");   
-                  co2Level(); // another state machine
-                  // Thus, set up additional time control for MODBUS calls:
-                  if (millis() - start_machine >= start_water_level*0.9){
-                    currentState = controllinoState::WATERLEVEL;
-                  }
-            }
-            break;
-
-        case controllinoState::WATERLEVEL:
-            if (millis() - start_machine >= start_water_level) {
-                displayState("WATERLEVEL state");
-                waterLevel();            
-                // Move to next state
-                currentState = controllinoState::EMERGENCY;
-            }
-            break;
-
-        case controllinoState::EMERGENCY:
-            if (millis() - start_machine >= (start_emergency)) {
-                displayState("EMERGENCY State");
-                controlWaterLevel();
-                // Move to next state
-                currentState = controllinoState::IDLE;
-
-                start_machine = millis(); // Comment this line to remove scheduling 
-            }
-            
-            break;
-
-        default:
-            // Nothing to do here
-            Serial.println("'Default' Switch Case reached - Error");
-    }
-}
-
-void displayState(String currentState){
-    static String prevState = "";
-
-    if (currentState != prevState) {
-        Serial.println(currentState);
-        prevState = currentState;
-    }
 }
 
 
