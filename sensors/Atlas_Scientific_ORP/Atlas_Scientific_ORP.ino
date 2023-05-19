@@ -2,7 +2,7 @@
 #include <Controllino.h>
 #include <SoftwareSerial.h>                           
 
-#define  myserial Serial1                             //define tx and rx on CONTROLLINO MAXI. 
+#define  myserial Serial2                             //define tx and rx on CONTROLLINO MAXI. 
                                                       //in this case TX1 18 pin and RX1 19 pin, hence it's Serial1                                  
 
 String inputstring = "";                              //a string to hold incoming data from the PC
@@ -14,8 +14,8 @@ float ORP;                                            //used to hold a floating 
 
 
 void setup() {                                        //set up the hardware
-  Serial.begin(9600);                                 //set baud rate for the hardware serial port_0 to 9600
-  myserial.begin(9600);                               //set baud rate for the software serial port to 9600
+  Serial.begin(19200);                                //set baud rate for the hardware serial port_0 to 9600
+  myserial.begin(19200);                              //set baud rate for the software serial port to 9600
   inputstring.reserve(10);                            //set aside some bytes for receiving data from the PC
   sensorstring.reserve(30);  
  

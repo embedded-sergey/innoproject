@@ -169,6 +169,8 @@ void stateMachine() {
         CO2,
         WATERLEVEL,
         EMERGENCY,   // defaults to 3
+        EC,
+        PH,
     };
 
     // Keep track of the current State (it's an controllinoState variable)
@@ -209,12 +211,27 @@ void stateMachine() {
                 displayState("EMERGENCY State");
                 controlWaterLevel();
                 // Move to next state
-                currentState = controllinoState::IDLE;
-
-                start_machine = millis(); // Comment this line to remove scheduling 
+                currentState = controllinoState::EC;
             }
-            
             break;
+
+        case controllinoState::EC:
+          if (millis() - start_machine >= start_ec) {
+            displayState("EC State");
+            ecLevel();
+            currentState = controllinoState::PH;
+          }
+          break;
+
+        case controllinoState::PH:
+          if(millis() - start_machine >= start_ph){
+            displayState("PH State");
+            phLevel();
+            currentState = controllinoState::IDLE;
+
+            start_machine = millis(); // Comment this line to remove scheduling 
+          }
+          break;
 
         default:
             // Nothing to do here
@@ -286,7 +303,7 @@ void waterLevel(void){
       digitalWrite(water_level_trig_pin, HIGH); // Sets the water_level_trig_pin HIGH (ACTIVE) for 10 microseconds (time for 8 cycle sonic bursts)
       delayMicroseconds(10); 
       digitalWrite(water_level_trig_pin, LOW);
-      duration = pulseIn(water_level_echo_pin, HIGH, 100); // Reads the water_level_echo_pin, returns the sound wave travel time in microseconds
+      duration = pulseIn(water_level_echo_pin, HIGH); // Reads the water_level_echo_pin, returns the sound wave travel time in microseconds
       distance = duration * 0.034 / 2; // Speed of sound wave divided by 2 (go and back)
       water_level_sum = water_level_sum + distance; // Sum calculation
       delay(20);
@@ -316,6 +333,28 @@ void controlWaterLevel(void){
 
 void buzzerAlarm(void){
       tone(buzzer_pin, 40); //4000 in real life;
+}
+
+
+void ecLevel (void){
+      int TDS_raw;
+      float voltage_EC;
+      float TDS_25;
+      float EC_25;
+      float EC_sum = 0;
+      float EC;
+      for (int i=0 ; i<5; i++){
+        TDS_raw = analogRead(tds_sensor_pin);
+        voltage_EC = TDS_raw*5/1024.0; //Convert analog reading to Voltage
+        TDS_25=(133.42/voltage_EC*voltage_EC*voltage_EC - 255.86*voltage_EC*voltage_EC + 857.39*voltage_EC)*0.5; //Convert voltage value to TDS value (original)
+        EC_25 = TDS_25*2;
+        EC = (1 + a*(t - 25))*EC_25;
+        EC_sum = EC_sum + EC; //sum formula for the following average calculation
+        delay(10);
+      }
+      av_EC = EC_sum / 5; // average of 5 samples
+      Serial.print("EC (uS): "); 
+      Serial.println(av_EC);
 }
 
 
@@ -354,26 +393,22 @@ void controlHeater(void){
 //  digitalWrite(water_heater_pin, HIGH);
   }
 }
-
+*/
 void phLevel (void){
-  static unsigned long samplingTime = millis();
-  static unsigned long printTime = millis();
   static float pHValue,pHvoltage;
-  if (currentMillis - start_ph_millis >  ph_period) //(millis()-samplingTime > samplingInterval)
-  {
-      pHArray[pHArrayIndex ++] = analogRead(ph_sensor_pin);
-      if(pHArrayIndex == ArrayLength){
-        pHArrayIndex = 0;
-      }
-      pHvoltage = avergearray(pHArray, ArrayLength) *5.0 / 1024;
-      pHValue = 3.5*pHvoltage+Offset;
-      Serial.print("pH Voltage:");
-      Serial.print(pHvoltage,2);
-      Serial.print("    pH value: ");
-      Serial.println(pHValue,2);
-      digitalWrite(LED,digitalRead(LED)^1);
-  }
+    pHArray[pHArrayIndex ++] = analogRead(ph_sensor_pin);
+    if(pHArrayIndex == ArrayLength){
+      pHArrayIndex = 0;
+    }
+    pHvoltage = avergearray(pHArray, ArrayLength) *5.0 / 1024;
+    pHValue = 3.5*pHvoltage+Offset;
+    Serial.print("pH Voltage:");
+    Serial.print(pHvoltage,2);
+    Serial.print("    pH value: ");
+    Serial.println(pHValue,2);
+    digitalWrite(LED,digitalRead(LED)^1);
 }
+
 double avergearray(int* arr, int number){
   int i;
   int max,min;
@@ -413,7 +448,11 @@ double avergearray(int* arr, int number){
   }//if
   return avg;
 }
-  
+
+/*
+
+
+
 void ecLevel (void){
   if (currentMillis - start_ec_millis >= ec_period){
     int TDS_raw;
