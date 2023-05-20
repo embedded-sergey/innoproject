@@ -26,8 +26,8 @@ const byte buzzer_pin = 7;               // Digital 5   X1
 const byte raspi_serial = 1;             // UART1       USB
 const byte orp_sensor = 2;               // UART2       X1
 const byte modbus_serial = 3;            // UART3       RS485
-const byte orp_sda_pin = 20;             // I2C SDA     X1
-const byte orp_scl_pin = 21;             // I2C SCL     X1
+/*const byte orp_sda_pin = 20;             // I2C SDA     X1
+const byte orp_scl_pin = 21;             // I2C SCL     X1*/
 
 ////////// RELAYS //////////
 const byte water_rack_pump_1_pin = 22;   // Relay 0     R0
@@ -53,14 +53,13 @@ OneWire oneWire(water_temp_pin);
 // Pass our oneWire reference to Dallas Temperature
 DallasTemperature sensors(&oneWire);
 // Insert address (to get, see DS18B20_get_address):
-uint8_t water_temp_address[8] = { 0x28, 0x7F, 0x17, 0xAC, 0x13, 0x19, 0x01, 0x9A };
+uint8_t sensor1[8] = { 0x28, 0x7F, 0x17, 0xAC, 0x13, 0x19, 0x01, 0x9A };
+uint8_t sensor2[8] = { 0x28, 0xFF, 0xC8, 0xC2, 0xC1, 0x16, 0x04, 0xB5 };
 
 //////////////////// PH SENSOR ///////////////////////
 const float Offset = 0.4;  //deviation compensate
 const byte LED = 10;
-const int ArrayLength = 40;  //times of collection
-int pHArray[ArrayLength];  //Store the average value of the sensor feedback
-int pHArrayIndex=0;
+float av_ph;
 
 /////////////// ELECTRIC CONDUCTIVITY ////////////////
 // No calibration required for EC. The electrical conductivity of an aqueous
@@ -69,6 +68,14 @@ const float a = 0.020;
 //int TEMP_raw for waterproof LM35;
 float t = 25;
 float av_EC;
+
+//////////////////////// ORP /////////////////////////
+#define  myserial Serial1 
+String inputstring = "";                              //a string to hold incoming data from the PC
+String sensorstring = "";                             //a string to hold the data from the Atlas Scientific product
+boolean input_string_complete = false;                //have we received all the data from the PC
+boolean sensor_string_complete = false;               //have we received all the data from the Atlas Scientific product
+float ORP;  
 
 
 
@@ -106,6 +113,10 @@ void setup(void){
   
   Serial.begin(19200);
   sensors.begin(); // Start up the library
+  myserial.begin(19200);                              //set baud rate for the software serial port to 9600
+  inputstring.reserve(10);                            //set aside some bytes for receiving data from the PC
+  sensorstring.reserve(30);
+
   ControllinoModbusMaster.begin(19200, SERIAL_8N2); // 
   ControllinoModbusMaster.setTimeOut( 1000 ); // if there is no answer in 5000 ms, roll over
 
@@ -147,7 +158,17 @@ void stateMachine() {
     static unsigned long start_machine = millis();
     // first 1000 ms are reserved for the last state processing
     static unsigned long start_idle = 1000;
+    static unsigned long start_water_level = 2000; 
+    static unsigned long start_emergency = 3000;
+    static unsigned long start_water_temperature = 4000;
+    static unsigned long start_ec = 5000;
+    static unsigned long start_ph = 6000;
+    static unsigned long start_orp = 10000;
+    
+    
+    /* PREVIOUS CODE
     static unsigned long start_co2 = 2000; // 1000 ms per probe
+    static unsigned long start_idle = 1000;
     static unsigned long start_fans = 4000; 
     static unsigned long start_orp = 5000;
     static unsigned long start_ec = 6000;
@@ -159,18 +180,20 @@ void stateMachine() {
     static unsigned long start_water_level = 12000;  
     static unsigned long start_emergency = 13000;
     static unsigned long start_sd_rtc = 14000;
-    static unsigned long start_to_raspi = 15000;
+    static unsigned long start_to_raspi = 15000;*/
     
     // Declare the states in meaningful English. Enums start enumerating
     // at zero, incrementing in steps of 1 unless overridden. We use an
     // enum 'class' here for type safety and code readability
     enum class controllinoState : uint8_t {
         IDLE,  // defaults to 0
-        CO2,
-        WATERLEVEL,
+        WATER,
         EMERGENCY,   // defaults to 3
+        TEMP,
         EC,
         PH,
+        ORP,         //needs adjustment
+        //CO2,       //needs adjustment
     };
 
     // Keep track of the current State (it's an controllinoState variable)
@@ -181,44 +204,44 @@ void stateMachine() {
         case controllinoState::IDLE:  
             // idling for 1000ms     
             if (millis() - start_machine >= start_idle) {
-                displayState("IDLE state"); 
-                currentState = controllinoState::CO2;
-            }
-            break;
-
-        case controllinoState::CO2:  
-            if (millis() - start_machine >= start_co2) {
-                  displayState("CO2 state");   
-                  co2Level(); // another state machine
-                  // Thus, set up additional time control for MODBUS calls:
-                  if (millis() - start_machine >= start_fans*0.9){
-                    currentState = controllinoState::WATERLEVEL;
-                  }
-            }
-            break;
-
-        case controllinoState::WATERLEVEL:
-            if (millis() - start_machine >= start_water_level) {
-                displayState("WATERLEVEL state");
-                waterLevel();            
+                displayState("IDLE state");
                 // Move to next state
-                currentState = controllinoState::EMERGENCY;
+                currentState = controllinoState::WATER;
             }
             break;
+
+        case controllinoState::WATER:
+          if (millis() - start_machine >= start_water_level) {
+            displayState("Water level ");
+            waterLevel();
+            // Move to next state
+            currentState = controllinoState::EMERGENCY;
+          }
+          break;
 
         case controllinoState::EMERGENCY:
             if (millis() - start_machine >= (start_emergency)) {
                 displayState("EMERGENCY State");
-                controlWaterLevel();
+                  controlWaterLevel();
                 // Move to next state
-                currentState = controllinoState::EC;
+                currentState = controllinoState::TEMP;
             }
             break;
 
+        case controllinoState::TEMP:
+            if (millis() - start_machine >= (start_water_temperature)) {
+                displayState("Water t° State");
+                waterTemperature();
+                // Move to next state
+                currentState = controllinoState::EC;
+            }
+            break;           
+
         case controllinoState::EC:
           if (millis() - start_machine >= start_ec) {
-            displayState("EC State");
+            displayState("EC State ");
             ecLevel();
+            // Move to next state
             currentState = controllinoState::PH;
           }
           break;
@@ -227,6 +250,16 @@ void stateMachine() {
           if(millis() - start_machine >= start_ph){
             displayState("PH State");
             phLevel();
+            // Move to next state
+            currentState = controllinoState::ORP;
+          }
+          break;
+
+        case controllinoState::ORP:
+          if(millis() - start_machine >= start_orp){
+            displayState("ORP State");
+            orp();
+            // Move to next state
             currentState = controllinoState::IDLE;
 
             start_machine = millis(); // Comment this line to remove scheduling 
@@ -249,6 +282,11 @@ void displayState(String currentState){
     }
 }
 
+
+
+//////////////////////////////////////////////////////////////////
+//////////////////////////  FUNCTIONS   //////////////////////////
+//////////////////////////////////////////////////////////////////
 
 void co2Level(void){
   switch( myState ) {
@@ -294,6 +332,7 @@ void co2Level(void){
 }
 
 
+
 void waterLevel(void){
     // 200 ms
     float water_level_sum = 0; // sum declaration
@@ -306,15 +345,15 @@ void waterLevel(void){
       duration = pulseIn(water_level_echo_pin, HIGH); // Reads the water_level_echo_pin, returns the sound wave travel time in microseconds
       distance = duration * 0.034 / 2; // Speed of sound wave divided by 2 (go and back)
       water_level_sum = water_level_sum + distance; // Sum calculation
-      delay(20);
     }
     av_dist = round(water_level_sum / 5.0); // one average value of distance in cm
-    water_level = map(av_dist, 2, 27, 100, 0); // one average value of distance in % | sensor's range starts from 2 cm (fixed)
-    Serial.print("Distance in cm: "); // prints average of 5 samples in cm
+    water_level = map(av_dist, 2, 22, 100, 0); // one average value of distance in % | sensor's range starts from 2 cm (fixed)
+    Serial.print("  Distance in cm: "); // prints average of 5 samples in cm
     Serial.print(av_dist);
     Serial.print("\t Distance in %: "); // prints average of 5 samples in %
     Serial.println(water_level); 
 }
+
 
 
 void controlWaterLevel(void){
@@ -331,9 +370,12 @@ void controlWaterLevel(void){
   }
 }
 
+
+
 void buzzerAlarm(void){
       tone(buzzer_pin, 40); //4000 in real life;
 }
+
 
 
 void ecLevel (void){
@@ -353,9 +395,81 @@ void ecLevel (void){
         delay(10);
       }
       av_EC = EC_sum / 5; // average of 5 samples
-      Serial.print("EC (uS): "); 
+      Serial.print("  EC (uS): "); 
       Serial.println(av_EC);
 }
+
+
+
+void phLevel (void){
+  float ph_value, voltage, ph_raw, ph_sum = 0;
+
+for (int k=0; k<5; k++){
+ph_raw = analogRead(ph_sensor_pin);
+voltage = ph_raw*5/1024.0;
+ph_value = 3.5*voltage+Offset;
+ph_sum = ph_sum + ph_value;
+}
+av_ph = ph_sum / 5;
+Serial.print("    pH value: ");
+Serial.println(av_ph);
+}
+
+
+
+void serialEvent(){                                   //ORP
+  inputstring = Serial.readStringUntil(13);           //read the string until we see a <CR>
+  input_string_complete = true;                       //set the flag used to tell if we have received a completed string from the PC
+}
+void orp(){
+    if (input_string_complete == true) {                //if a string from the PC has been received in its entirety
+    myserial.print(inputstring);                      //send that string to the Atlas Scientific product
+    myserial.print('\r');                             //add a <CR> to the end of the string
+    inputstring = "";                                 //clear the string
+    input_string_complete = false;                    //reset the flag used to tell if we have received a completed string from the PC
+  }
+  if (myserial.available() > 0) {                     //if we see that the Atlas Scientific product has sent a character
+    char inchar = (char)myserial.read();              //get the char we just received
+    sensorstring += inchar;                           //add the char to the var called sensorstring
+    if (inchar == '\r') {                             //if the incoming character is a <CR>
+      sensor_string_complete = true;                  //set the flag
+    }
+  }
+  if (sensor_string_complete == true) {               //if a string from the Atlas Scientific product has been received in its entirety
+    Serial.println(sensorstring);                     //send that string to the PC's serial monitor
+    /*                                                //uncomment this section to see how to convert the ORP reading from a string to a float 
+    if (isdigit(sensorstring[0])) {                   //if the first character in the string is a digit
+      ORP = sensorstring.toFloat();                   //convert the string to a floating point number so it can be evaluated by the Arduino
+      if (ORP >= 500.0) {                             //if the ORP is greater than or equal to 500
+        Serial.println("high");                       //print "high" this is demonstrating that the Arduino is evaluating the ORP as a number and not as a string
+      }
+      if (ORP <= 499.9) {                             //if the ORP is less than or equal to 499.9
+        Serial.println("low");                        //print "low" this is demonstrating that the Arduino is evaluating the ORP as a number and not as a string
+      }
+    }
+   */
+    sensorstring = "";                                //clear the string
+    sensor_string_complete = false;                   //reset the flag used to tell if we have received a completed string from the Atlas Scientific product
+  }
+}
+
+
+
+void waterTemperature(void){
+  sensors.requestTemperatures();
+  Serial.print("Temp_1 (°C): ");
+  printTemperature(sensor1);
+  Serial.print("Temp_2 (°C): ");
+  printTemperature(sensor2);
+  Serial.println();
+  
+}
+void printTemperature(DeviceAddress deviceAddress){
+  water_temperature = sensors.getTempC(deviceAddress);
+  Serial.print(water_temperature);
+  Serial.print("\t");
+}
+
 
 
 /*
@@ -370,20 +484,7 @@ void buzzerAlarm(void){
     }
 }
 
-void waterTemperature(void){
-  if(currentMillis - start_water_temperature_millis >= water_temperature_period){
-    sensors.requestTemperatures();
-    Serial.print("Water temp (°C): ");
-    printTemperature(water_temp_address);
-    Serial.println();
-  }
-}
 
-void printTemperature(DeviceAddress deviceAddress){
-  water_temperature = sensors.getTempC(deviceAddress);
-  Serial.print(water_temperature);
-  Serial.print("\t");
-}
 
 void controlHeater(void){
     if (water_temperature >= 24){
@@ -394,88 +495,7 @@ void controlHeater(void){
   }
 }
 */
-void phLevel (void){
-  static float pHValue,pHvoltage;
-    pHArray[pHArrayIndex ++] = analogRead(ph_sensor_pin);
-    if(pHArrayIndex == ArrayLength){
-      pHArrayIndex = 0;
-    }
-    pHvoltage = avergearray(pHArray, ArrayLength) *5.0 / 1024;
-    pHValue = 3.5*pHvoltage+Offset;
-    Serial.print("pH Voltage:");
-    Serial.print(pHvoltage,2);
-    Serial.print("    pH value: ");
-    Serial.println(pHValue,2);
-    digitalWrite(LED,digitalRead(LED)^1);
-}
-
-double avergearray(int* arr, int number){
-  int i;
-  int max,min;
-  double avg;
-  long amount=0;
-  if(number<=0){
-    Serial.println("Error number for the array to avraging!/n");
-    return 0;
-  }
-  if(number<5){   //less than 5, calculated directly statistics
-    for(i=0;i<number;i++){
-      amount+=arr[i];
-    }
-    avg = amount/number;
-    return avg;
-  }else{
-    if(arr[0]<arr[1]){
-      min = arr[0];max=arr[1];
-    }
-    else{
-      min=arr[1];max=arr[0];
-    }
-    for(i=2;i<number;i++){
-      if(arr[i]<min){
-        amount+=min;        //arr<min
-        min=arr[i];
-      }else {
-        if(arr[i]>max){
-          amount+=max;    //arr>max
-          max=arr[i];
-        }else{
-          amount+=arr[i]; //min<=arr<=max
-        }
-      }//if
-    }//for
-    avg = (double)amount/(number-2);
-  }//if
-  return avg;
-}
-
 /*
-
-
-
-void ecLevel (void){
-  if (currentMillis - start_ec_millis >= ec_period){
-    int TDS_raw;
-    float voltage_EC;
-    float TDS_25;
-    float EC_25;
-    float EC_sum = 0;
-    float EC;
-    for (int i=0 ; i<5; i++){
-      TDS_raw = analogRead(tds_sensor_pin);
-      voltage_EC = TDS_raw*5/1024.0; //Convert analog reading to Voltage
-      TDS_25=(133.42/voltage_EC*voltage_EC*voltage_EC - 255.86*voltage_EC*voltage_EC + 857.39*voltage_EC)*0.5; //Convert voltage value to TDS value (original)
-      EC_25 = TDS_25*2;
-      EC = (1 + a*(t - 25))*EC_25;
-      EC_sum = EC_sum + EC; //sum formula for the following average calculation
-      delay(10);
-    }
-    av_EC = EC_sum / 5; // average of 5 samples
-    Serial.print("EC (uS): "); 
-    Serial.println(av_EC);
-  }
-}
-
 
 void printAll (void){
   if (currentMillis - start_print_all_millis >= print_all_period){
