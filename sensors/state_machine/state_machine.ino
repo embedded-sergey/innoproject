@@ -4,6 +4,7 @@
 #include <Controllino.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include <SoftwareSerial.h>   
 #include "ModbusRtu.h" 
 
 ////////////////////////////////////////////////////////////////////
@@ -24,7 +25,7 @@ const byte buzzer_pin = 7;               // Digital 5   X1
 
 ////////// INTERFACES //////////
 const byte raspi_serial = 1;             // UART1       USB
-const byte orp_sensor = 2;               // UART2       X1
+//const byte orp_sensor = 2;               // UART2       X1
 const byte modbus_serial = 3;            // UART3       RS485
 /*const byte orp_sda_pin = 20;             // I2C SDA     X1
 const byte orp_scl_pin = 21;             // I2C SCL     X1*/
@@ -47,7 +48,7 @@ int av_dist;
 int water_level;
 
 ////////// WATER TEMPERATURE //////////
-float water_temperature;
+float av_temp;
 // Setup a oneWire instance to communicate with any OneWire devices
 OneWire oneWire(water_temp_pin);
 // Pass our oneWire reference to Dallas Temperature
@@ -112,8 +113,8 @@ void setup(void){
   pinMode(LED,OUTPUT);
   
   Serial.begin(19200);
+  Serial1.begin(19200);  
   sensors.begin(); // Start up the library
-  myserial.begin(19200);                              //set baud rate for the software serial port to 9600
   inputstring.reserve(10);                            //set aside some bytes for receiving data from the PC
   sensorstring.reserve(30);
 
@@ -148,6 +149,11 @@ void setup(void){
 ////////////////////////////////////////////////////////////////////
 //////////////////////////   MAIN LOOP   ///////////////////////////
 ////////////////////////////////////////////////////////////////////
+void serialEvent1() {                                 //if the hardware serial port_3 receives a char
+  sensorstring = Serial1.readStringUntil(13);         //read the string until we see a <CR>
+  sensor_string_complete = true;                      //set the flag used to tell if we have received a completed string from the PC
+}
+
 
 void loop(void){
   stateMachine(); // if not busy, waiting for triggers/events.
@@ -157,13 +163,13 @@ void loop(void){
 void stateMachine() {
     static unsigned long start_machine = millis();
     // first 1000 ms are reserved for the last state processing
-    static unsigned long start_idle = 1000;
-    static unsigned long start_water_level = 2000; 
-    static unsigned long start_emergency = 3000;
-    static unsigned long start_water_temperature = 4000;
-    static unsigned long start_ec = 5000;
-    static unsigned long start_ph = 6000;
-    static unsigned long start_orp = 10000;
+    static unsigned long start_idle = 2000;
+    static unsigned long start_water_level = 4000; 
+    static unsigned long start_emergency = 6000;
+    static unsigned long start_water_temperature = 8000;
+    static unsigned long start_ec = 10000;
+    static unsigned long start_ph = 12000;
+    static unsigned long start_orp = 14000;
     
     
     /* PREVIOUS CODE
@@ -230,7 +236,7 @@ void stateMachine() {
 
         case controllinoState::TEMP:
             if (millis() - start_machine >= (start_water_temperature)) {
-                displayState("Water t° State");
+                displayState("Water tC° State");
                 waterTemperature();
                 // Move to next state
                 currentState = controllinoState::EC;
@@ -258,7 +264,9 @@ void stateMachine() {
         case controllinoState::ORP:
           if(millis() - start_machine >= start_orp){
             displayState("ORP State");
+            serialEvent1();
             orp();
+            
             // Move to next state
             currentState = controllinoState::IDLE;
 
@@ -390,7 +398,7 @@ void ecLevel (void){
         voltage_EC = TDS_raw*5/1024.0; //Convert analog reading to Voltage
         TDS_25=(133.42/voltage_EC*voltage_EC*voltage_EC - 255.86*voltage_EC*voltage_EC + 857.39*voltage_EC)*0.5; //Convert voltage value to TDS value (original)
         EC_25 = TDS_25*2;
-        EC = (1 + a*(t - 25))*EC_25;
+        EC = (1 + a*(av_temp - 25))*EC_25;    //real temp compensation 
         EC_sum = EC_sum + EC; //sum formula for the following average calculation
         delay(10);
       }
@@ -417,39 +425,20 @@ Serial.println(av_ph);
 
 
 
-void serialEvent(){                                   //ORP
-  inputstring = Serial.readStringUntil(13);           //read the string until we see a <CR>
-  input_string_complete = true;                       //set the flag used to tell if we have received a completed string from the PC
-}
 void orp(){
-    if (input_string_complete == true) {                //if a string from the PC has been received in its entirety
-    myserial.print(inputstring);                      //send that string to the Atlas Scientific product
-    myserial.print('\r');                             //add a <CR> to the end of the string
+  
+  if (input_string_complete == true) {                //if a string from the PC has been received in its entirety
+    Serial1.print(inputstring);                       //send that string to the Atlas Scientific product
+    Serial1.print('\r');                              //add a <CR> to the end of the string
     inputstring = "";                                 //clear the string
     input_string_complete = false;                    //reset the flag used to tell if we have received a completed string from the PC
   }
-  if (myserial.available() > 0) {                     //if we see that the Atlas Scientific product has sent a character
-    char inchar = (char)myserial.read();              //get the char we just received
-    sensorstring += inchar;                           //add the char to the var called sensorstring
-    if (inchar == '\r') {                             //if the incoming character is a <CR>
-      sensor_string_complete = true;                  //set the flag
-    }
-  }
+  
   if (sensor_string_complete == true) {               //if a string from the Atlas Scientific product has been received in its entirety
     Serial.println(sensorstring);                     //send that string to the PC's serial monitor
-    /*                                                //uncomment this section to see how to convert the ORP reading from a string to a float 
-    if (isdigit(sensorstring[0])) {                   //if the first character in the string is a digit
-      ORP = sensorstring.toFloat();                   //convert the string to a floating point number so it can be evaluated by the Arduino
-      if (ORP >= 500.0) {                             //if the ORP is greater than or equal to 500
-        Serial.println("high");                       //print "high" this is demonstrating that the Arduino is evaluating the ORP as a number and not as a string
-      }
-      if (ORP <= 499.9) {                             //if the ORP is less than or equal to 499.9
-        Serial.println("low");                        //print "low" this is demonstrating that the Arduino is evaluating the ORP as a number and not as a string
-      }
-    }
-   */
-    sensorstring = "";                                //clear the string
-    sensor_string_complete = false;                   //reset the flag used to tell if we have received a completed string from the Atlas Scientific product
+
+  sensorstring = "";                                  //clear the string:
+  sensor_string_complete = false;                     //reset the flag used to tell if we have received a completed string from the Atlas Scientific product
   }
 }
 
@@ -457,18 +446,18 @@ void orp(){
 
 void waterTemperature(void){
   sensors.requestTemperatures();
-  Serial.print("Temp_1 (°C): ");
-  printTemperature(sensor1);
-  Serial.print("Temp_2 (°C): ");
-  printTemperature(sensor2);
-  Serial.println();
+  float tempC1 = sensors.getTempC(sensor1);
+  Serial.print("Temp1 (°C): " + (String)tempC1 + "\t");
   
+  float tempC2 = sensors.getTempC(sensor2);
+  Serial.print("Temp2 (°C): " + (String)tempC2 + "\n");
+
+  av_temp = (tempC1 + tempC2)/2;
+  Serial.println(av_temp);
+
 }
-void printTemperature(DeviceAddress deviceAddress){
-  water_temperature = sensors.getTempC(deviceAddress);
-  Serial.print(water_temperature);
-  Serial.print("\t");
-}
+
+
 
 
 
