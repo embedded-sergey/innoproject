@@ -28,9 +28,8 @@ const byte raspi_serial = 1;             // UART1       X1
 const byte modbus_serial = 3;            // UART3       RS485
 
 ////////// RELAYS //////////
-
-const byte water_pump_pin = 25;         // Relay 3     R3
-const byte fan_pin = 26;                // Relay 4     R4
+const byte fan_pin = 25;                 // Relay 3     R3
+const byte water_pump_pin = 26;          // Relay 4     R4
 
 
 ////////////////////////////////////////////////////////////////////
@@ -93,7 +92,6 @@ unsigned long WaitingTime;
 void setup(void){
   pinMode(water_pump_pin, OUTPUT);
   pinMode(fan_pin, OUTPUT);
-  pinMode(water_heater_pin, OUTPUT);
   pinMode(water_level_trig_pin, OUTPUT);
   pinMode(water_level_echo_pin, INPUT);
   pinMode(LED,OUTPUT);
@@ -137,13 +135,15 @@ void loop(void){
   stateMachine(); // if not busy, waiting for triggers/events.
   }
 
-
 void stateMachine() {
     static unsigned long start_machine = millis();
     // first 1000 ms are reserved for the last state processing
     static unsigned long start_idle = 2000;
     static unsigned long start_co2 = 3000;
-    static unsigned long start_water_level = 4000; 
+    static unsigned long start_h2o2 = 4000;
+    static unsigned long start_fan = 5000;
+    static unsigned long start_buzzer = 5300;
+    static unsigned long start_water_level = 5500; 
     static unsigned long start_emergency = 6000;
     static unsigned long start_water_temperature = 7000;
     static unsigned long start_ec = 8000;
@@ -171,10 +171,13 @@ void stateMachine() {
     // at zero, incrementing in steps of 1 unless overridden. We use an
     // enum 'class' here for type safety and code readability
     enum class controllinoState : uint8_t {
-        IDLE,  // defaults to 0
+        IDLE,  
         CO2,
+        H2O2,
+        FAN,
+        BUZZER,
         WATER,
-        EMERGENCY,   // defaults to 3
+        EMERGENCY,   
         TEMP,
         EC,
         PH,
@@ -187,24 +190,48 @@ void stateMachine() {
     // Process according to our State Diagram
     switch (currentState) {
         case controllinoState::IDLE:  
-            // idling for 1000ms     
-            if (millis() - start_machine >= start_idle) {
-                displayState("IDLE state");
-                currentState = controllinoState::CO2;
-            }
-            break;
+          if (millis() - start_machine >= start_idle) {
+            displayState("IDLE state");
+            currentState = controllinoState::CO2;
+          }
+          break;
             
         case controllinoState::CO2:
           if(millis() - start_machine >= start_co2){
             displayState("CO2 State");
-            while(millis() - start_machine <= start_water_level){
+            while(millis() - start_machine <= start_h2o2){
               co2Level();
             }
-            // Move to next state
-            currentState = controllinoState::WATER;
+            currentState = controllinoState::H2O2;
           }
           break;
           
+        case controllinoState::H2O2:
+          if(millis() - start_machine >= start_h2o2){
+            displayState("H2O2 State");
+            while(millis() - start_machine <= start_water_level){
+              h2o2Level();
+            }
+            currentState = controllinoState::FAN;
+          }
+          break;
+          
+        case controllinoState::FAN:
+          if (millis() - start_machine >= start_fan) {
+            displayState("Fan status");
+            controlFan();
+            currentState = controllinoState::BUZZER;
+          }
+          break;
+
+        case controllinoState::BUZZER:
+          if (millis() - start_machine >= start_fan) {
+            displayState("Buzzer status");
+            buzzerOff();
+            currentState = controllinoState::WATER;
+          }
+          break;
+        
         case controllinoState::WATER:
           if (millis() - start_machine >= start_water_level) {
             displayState("Water level ");
@@ -214,20 +241,20 @@ void stateMachine() {
           break;
 
         case controllinoState::EMERGENCY:
-            if (millis() - start_machine >= (start_emergency)) {
-                displayState("EMERGENCY State");
-                  controlWaterLevel();
-                currentState = controllinoState::TEMP;
+          if (millis() - start_machine >= (start_emergency)) {
+            displayState("EMERGENCY State");
+              controlWaterLevel();
+            currentState = controllinoState::TEMP;
             }
             break;
 
         case controllinoState::TEMP:
-            if (millis() - start_machine >= (start_water_temperature)) {
-                displayState("Water tC° State");
-                waterTemperature();
-                currentState = controllinoState::EC;
-            }
-            break;           
+          if (millis() - start_machine >= (start_water_temperature)) {
+            displayState("Water tC° State");
+            waterTemperature();
+            currentState = controllinoState::EC;
+          }
+          break;           
 
         case controllinoState::EC:
           if (millis() - start_machine >= start_ec) {
@@ -253,7 +280,7 @@ void stateMachine() {
             orp();
             currentState = controllinoState::IDLE;
 
-            start_machine = millis(); // Comment this line to remove scheduling 
+            start_machine = millis(); //RESET TIME LINE!
           }
           break;
           
@@ -312,7 +339,40 @@ void co2Level(void){
         *GMP252_CO2_uint32 = (unsigned long)ModbusSlaveRegisters[1]<<16 | ModbusSlaveRegisters[0]; // Float - Mid-Little Endian CDAB
         Serial.print("CO2_ppm: ");  
         Serial.println(GMP252_CO2, 2);
-        
+      }
+    }
+    break;
+  }
+}
+
+void h2o2Level(void){
+  switch( myState ) {
+    case 0: 
+    if (millis() > WaitingTime) myState++; // wait state
+    break;
+    
+    case 1: 
+    ControllinoModbusMaster.query( ModbusQuery[currentQuery] ); // send query (only once)
+    myState++;
+    currentQuery++;
+    if (currentQuery == 2) {
+      currentQuery = 0;
+    }
+    break;
+    
+    case 2:
+    ControllinoModbusMaster.poll(); // check incoming messages
+    if (ControllinoModbusMaster.getState() == COM_IDLE){   // response from the slave was received
+      myState = 0;
+      WaitingTime = millis() + 500; 
+      
+      if (currentQuery == 0){
+        // registers write was proceed
+        // Serial.println("---------- WRITE RESPONSE RECEIVED ----");
+        // Serial.println("");
+      }
+      
+      if (currentQuery == 1){
         unsigned long *HPP271_H2O2_uint32;
         HPP271_H2O2_uint32 = (unsigned long*)&HPP271_H2O2;
         *HPP271_H2O2_uint32 = (unsigned long)ModbusSlaveRegisters[5]<<16 | ModbusSlaveRegisters[4]; // Float - Mid-Little Endian CDAB
@@ -322,6 +382,22 @@ void co2Level(void){
     }
     break;
   }
+}
+
+void controlFan(void){
+  if (GMP252_CO2 > 1000 || HPP271_H2O2 > 1){
+    digitalWrite(fan_pin, HIGH);
+    Serial.println("Fan is ON");
+  }
+  else{
+    digitalWrite(fan_pin, LOW);
+    Serial.println("Fan is OFF");
+    }
+}
+
+void buzzerOff(void){
+  noTone(buzzer_pin);
+  Serial.println("Buzzer is OFF");
 }
 
 void waterLevel(void){
@@ -347,16 +423,14 @@ void waterLevel(void){
 
 
 
+
 void controlWaterLevel(void){
   if (water_level <= 20 || water_level >= 90){
     digitalWrite(water_pump_pin, LOW);
-    digitalWrite(fan_pin, LOW);
-    digitalWrite(water_heater_pin, LOW);
     buzzerAlarm(); // call method for pulsing alarm sound
   }
   else{
     digitalWrite(water_pump_pin, HIGH);
-    digitalWrite(fan_pin, HIGH);  
     noTone(buzzer_pin);
   }
 }
