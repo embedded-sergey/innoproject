@@ -3,8 +3,7 @@
 ////////////////////////////////////////////////////////////////////
 #include <Controllino.h>
 #include <OneWire.h>
-#include <DallasTemperature.h>
-#include <SoftwareSerial.h>   
+#include <DallasTemperature.h> 
 #include "ModbusRtu.h" 
 
 ////////////////////////////////////////////////////////////////////
@@ -24,19 +23,16 @@ const byte water_level_echo_pin = 6;     // Digital 4   X1
 const byte buzzer_pin = 7;               // Digital 5   X1
 
 ////////// INTERFACES //////////
-const byte raspi_serial = 1;             // UART1       USB
-//const byte orp_sensor = 2;               // UART2       X1
+//const byte orp_serial = 1;               // UART1      X1
+const byte raspi_serial = 2;             // UART2       X1
 const byte modbus_serial = 3;            // UART3       RS485
-/*const byte orp_sda_pin = 20;             // I2C SDA     X1
-const byte orp_scl_pin = 21;             // I2C SCL     X1*/
 
 ////////// RELAYS //////////
-const byte water_rack_pump_1_pin = 22;   // Relay 0     R0
-const byte water_rack_pump_2_pin = 23;   // Relay 1     R1
-const byte water_heater_pin = 24;        // Relay 2     R2
+const byte water_heater_pin = 26;        // Relay 2     R2
+const byte water_pump_pin = 25;   // Relay 3     R3
+const byte fan_pin = 26;   // Relay 4     R4
 
-
-
+SoftwareSerial mySerial(53, 20);
 ////////////////////////////////////////////////////////////////////
 /////////////////////   SENSOR CONFIGURATIONS   ////////////////////
 ////////////////////////////////////////////////////////////////////
@@ -71,7 +67,6 @@ float t = 25;
 float av_EC;
 
 //////////////////////// ORP /////////////////////////
-#define  myserial Serial1 
 String inputstring = "";                              //a string to hold incoming data from the PC
 String sensorstring = "";                             //a string to hold the data from the Atlas Scientific product
 boolean input_string_complete = false;                //have we received all the data from the PC
@@ -105,21 +100,21 @@ float GMP252_2_CO2;
 ////////////////////////////////////////////////////////////////////
 
 void setup(void){
-  pinMode(water_rack_pump_1_pin, OUTPUT);
-  pinMode(water_rack_pump_2_pin, OUTPUT);
+  pinMode(water_pump_pin, OUTPUT);
+  pinMode(fan_pin, OUTPUT);
   pinMode(water_heater_pin, OUTPUT);
   pinMode(water_level_trig_pin, OUTPUT);
   pinMode(water_level_echo_pin, INPUT);
   pinMode(LED,OUTPUT);
   
   Serial.begin(19200);
-  Serial1.begin(19200);  
+  mySerial.begin(19200);  
   sensors.begin(); // Start up the library
-  inputstring.reserve(10);                            //set aside some bytes for receiving data from the PC
+  inputstring.reserve(10);                            
   sensorstring.reserve(30);
 
   ControllinoModbusMaster.begin(19200, SERIAL_8N2); // 
-  ControllinoModbusMaster.setTimeOut( 1000 ); // if there is no answer in 5000 ms, roll over
+  ControllinoModbusMaster.setTimeOut(1000); // if there is no answer in 5000 ms, roll over
 
   // ModbusQuery 0: read registers from GMP252_1
   ModbusQuery[0].u8id = SlaveModbusAdd_GMP252_1; // slave address
@@ -136,7 +131,6 @@ void setup(void){
   ModbusQuery[1].au16reg = ModbusSlaveRegisters+4; // pointer to a memory array in the CONTROLLINO
 
   // Serial configurations of ModbusRTU: baud-rate, data bits, parity, stop bits 
-  ControllinoModbusMaster.begin(19200, SERIAL_8N2); // 
   ControllinoModbusMaster.setTimeOut( 5000 ); // if there is no answer in 5000 ms, roll over
  
   WaitingTime = millis() + 1000;
@@ -149,10 +143,7 @@ void setup(void){
 ////////////////////////////////////////////////////////////////////
 //////////////////////////   MAIN LOOP   ///////////////////////////
 ////////////////////////////////////////////////////////////////////
-void serialEvent1() {                                 //if the hardware serial port_3 receives a char
-  sensorstring = Serial1.readStringUntil(13);         //read the string until we see a <CR>
-  sensor_string_complete = true;                      //set the flag used to tell if we have received a completed string from the PC
-}
+
 
 
 void loop(void){
@@ -170,6 +161,7 @@ void stateMachine() {
     static unsigned long start_ec = 10000;
     static unsigned long start_ph = 12000;
     static unsigned long start_orp = 14000;
+    static unsigned long start_co2 = 16000;
     
     
     /* PREVIOUS CODE
@@ -199,7 +191,7 @@ void stateMachine() {
         EC,
         PH,
         ORP,         //needs adjustment
-        //CO2,       //needs adjustment
+        CO2,       //needs adjustment
     };
 
     // Keep track of the current State (it's an controllinoState variable)
@@ -211,7 +203,6 @@ void stateMachine() {
             // idling for 1000ms     
             if (millis() - start_machine >= start_idle) {
                 displayState("IDLE state");
-                // Move to next state
                 currentState = controllinoState::WATER;
             }
             break;
@@ -220,7 +211,6 @@ void stateMachine() {
           if (millis() - start_machine >= start_water_level) {
             displayState("Water level ");
             waterLevel();
-            // Move to next state
             currentState = controllinoState::EMERGENCY;
           }
           break;
@@ -229,7 +219,6 @@ void stateMachine() {
             if (millis() - start_machine >= (start_emergency)) {
                 displayState("EMERGENCY State");
                   controlWaterLevel();
-                // Move to next state
                 currentState = controllinoState::TEMP;
             }
             break;
@@ -238,7 +227,6 @@ void stateMachine() {
             if (millis() - start_machine >= (start_water_temperature)) {
                 displayState("Water tC° State");
                 waterTemperature();
-                // Move to next state
                 currentState = controllinoState::EC;
             }
             break;           
@@ -247,7 +235,6 @@ void stateMachine() {
           if (millis() - start_machine >= start_ec) {
             displayState("EC State ");
             ecLevel();
-            // Move to next state
             currentState = controllinoState::PH;
           }
           break;
@@ -256,7 +243,6 @@ void stateMachine() {
           if(millis() - start_machine >= start_ph){
             displayState("PH State");
             phLevel();
-            // Move to next state
             currentState = controllinoState::ORP;
           }
           break;
@@ -264,8 +250,17 @@ void stateMachine() {
         case controllinoState::ORP:
           if(millis() - start_machine >= start_orp){
             displayState("ORP State");
+            serialEvent();
             serialEvent1();
             orp();
+            currentState = controllinoState::CO2;
+          }
+          break;
+
+        case controllinoState::CO2:
+          if(millis() - start_machine >= start_co2){
+            displayState("CO2 State");
+            co2Level();
             
             // Move to next state
             currentState = controllinoState::IDLE;
@@ -273,7 +268,7 @@ void stateMachine() {
             start_machine = millis(); // Comment this line to remove scheduling 
           }
           break;
-
+          
         default:
             // Nothing to do here
             Serial.println("'Default' Switch Case reached - Error");
@@ -295,6 +290,130 @@ void displayState(String currentState){
 //////////////////////////////////////////////////////////////////
 //////////////////////////  FUNCTIONS   //////////////////////////
 //////////////////////////////////////////////////////////////////
+
+
+
+void waterLevel(void){
+    // 200 ms
+    float water_level_sum = 0; // sum declaration
+    for (int i=0 ; i<5 ; i++){ // 5 samples are taken
+      digitalWrite(water_level_trig_pin, LOW); // Clears the water_level_trig_pin condition first
+      delayMicroseconds(2);
+      digitalWrite(water_level_trig_pin, HIGH); // Sets the water_level_trig_pin HIGH (ACTIVE) for 10 microseconds (time for 8 cycle sonic bursts)
+      delayMicroseconds(10); 
+      digitalWrite(water_level_trig_pin, LOW);
+      duration = pulseIn(water_level_echo_pin, HIGH); // Reads the water_level_echo_pin, returns the sound wave travel time in microseconds
+      distance = duration * 0.034 / 2; // Speed of sound wave divided by 2 (go and back)
+      water_level_sum = water_level_sum + distance; // Sum calculation
+    }
+    av_dist = round(water_level_sum / 5.0); // one average value of distance in cm
+    water_level = map(av_dist, 2, 22, 100, 0); // one average value of distance in % | sensor's range starts from 2 cm (fixed)
+    Serial.print("  Distance in cm: "); // prints average of 5 samples in cm
+    Serial.print(av_dist);
+    Serial.print("\t Distance in %: "); // prints average of 5 samples in %
+    Serial.println(water_level); 
+}
+
+
+
+void controlWaterLevel(void){
+  if (water_level <= 20 || water_level >= 90){
+    digitalWrite(water_pump_pin, LOW);
+    digitalWrite(fan_pin, LOW);
+    digitalWrite(water_heater_pin, LOW);
+    buzzerAlarm(); // call method for pulsing alarm sound
+  }
+  else{
+    digitalWrite(water_pump_pin, HIGH);
+    digitalWrite(fan_pin, HIGH);  
+    noTone(buzzer_pin);
+  }
+}
+
+
+
+void buzzerAlarm(void){
+      tone(buzzer_pin, 40); //4000 in real life;
+}
+
+
+
+void ecLevel (void){
+      int TDS_raw;
+      float voltage_EC;
+      float TDS_25;
+      float EC_25;
+      float EC_sum = 0;
+      float EC;
+      for (int i=0 ; i<5; i++){
+        TDS_raw = analogRead(tds_sensor_pin);
+        voltage_EC = TDS_raw*5/1024.0; //Convert analog reading to Voltage
+        TDS_25=(133.42*voltage_EC*voltage_EC*voltage_EC - 255.86*voltage_EC*voltage_EC + 857.39*voltage_EC)*0.5; //Convert voltage value to TDS value (original)
+        EC_25 = TDS_25*2;
+        EC = (1 + a*(av_temp - 25))*EC_25;    //real temp compensation 
+        EC_sum = EC_sum + EC; //sum formula for the following average calculation
+        delay(10);
+      }
+      av_EC = EC_sum / 5; // average of 5 samples
+      Serial.print("  EC (uS): "); 
+      Serial.println(av_EC);
+}
+
+
+
+void phLevel (void){
+  float ph_value, voltage, ph_raw, ph_sum = 0;
+  
+  for (int k=0; k<5; k++){
+    ph_raw = analogRead(ph_sensor_pin);
+    voltage = ph_raw*5/1024.0;
+    ph_value = 3.5*voltage+Offset;
+    ph_sum = ph_sum + ph_value;
+  }
+  av_ph = ph_sum / 5;
+  Serial.print("    pH value: ");
+  Serial.println(av_ph);
+}
+
+
+
+void waterTemperature(void){
+  sensors.requestTemperatures();
+  float tempC1 = sensors.getTempC(sensor1);
+  Serial.print("Temp1 (°C): " + (String)tempC1 + "\t");
+  
+  float tempC2 = sensors.getTempC(sensor2);
+  Serial.print("Temp2 (°C): " + (String)tempC2 + "\n");
+
+  av_temp = (tempC1 + tempC2)/2;
+  Serial.println(av_temp);
+}
+
+
+void orp() {                                         //here we go...
+  Serial.println(input_string_complete);
+  if (input_string_complete == true) {                //if a string from the PC has been received in its entirety
+    mySerial.print(inputstring);                       //send that string to the Atlas Scientific product
+    mySerial.print('\r');                              //add a <CR> to the end of the string
+    inputstring = "";                                 //clear the string
+    input_string_complete = false;                    //reset the flag used to tell if we have received a completed string from the PC
+  }
+  Serial.println(sensor_string_complete);
+  if (sensor_string_complete == true) {               //if a string from the Atlas Scientific product has been received in its entirety
+    Serial.println(sensorstring);                     //send that string to the PC's serial monitor
+  }
+  sensorstring = "";                                  //clear the string:
+  sensor_string_complete = false;                     //reset the flag used to tell if we have received a completed string from the Atlas Scientific product
+}
+void serialEvent() {                                  //if the hardware serial port_0 receives a char
+  inputstring = Serial.readStringUntil(13);           //read the string until we see a <CR>
+  input_string_complete = true;                       //set the flag used to tell if we have received a completed string from the PC
+}
+void serialEvent1() {                                 //if the hardware serial port_3 receives a char
+  sensorstring = mySerial.readStringUntil(13);         //read the string until we see a <CR>
+  sensor_string_complete = true;                      //set the flag used to tell if we have received a completed string from the PC
+}
+
 
 void co2Level(void){
   switch( myState ) {
@@ -338,126 +457,6 @@ void co2Level(void){
     break;
   }
 }
-
-
-
-void waterLevel(void){
-    // 200 ms
-    float water_level_sum = 0; // sum declaration
-    for (int i=0 ; i<5 ; i++){ // 5 samples are taken
-      digitalWrite(water_level_trig_pin, LOW); // Clears the water_level_trig_pin condition first
-      delayMicroseconds(2);
-      digitalWrite(water_level_trig_pin, HIGH); // Sets the water_level_trig_pin HIGH (ACTIVE) for 10 microseconds (time for 8 cycle sonic bursts)
-      delayMicroseconds(10); 
-      digitalWrite(water_level_trig_pin, LOW);
-      duration = pulseIn(water_level_echo_pin, HIGH); // Reads the water_level_echo_pin, returns the sound wave travel time in microseconds
-      distance = duration * 0.034 / 2; // Speed of sound wave divided by 2 (go and back)
-      water_level_sum = water_level_sum + distance; // Sum calculation
-    }
-    av_dist = round(water_level_sum / 5.0); // one average value of distance in cm
-    water_level = map(av_dist, 2, 22, 100, 0); // one average value of distance in % | sensor's range starts from 2 cm (fixed)
-    Serial.print("  Distance in cm: "); // prints average of 5 samples in cm
-    Serial.print(av_dist);
-    Serial.print("\t Distance in %: "); // prints average of 5 samples in %
-    Serial.println(water_level); 
-}
-
-
-
-void controlWaterLevel(void){
-  if (water_level <= 20 || water_level >= 90){
-    digitalWrite(water_rack_pump_1_pin, LOW);
-    digitalWrite(water_rack_pump_2_pin, LOW);
-    digitalWrite(water_heater_pin, LOW);
-    buzzerAlarm(); // call method for pulsing alarm sound
-  }
-  else{
-    digitalWrite(water_rack_pump_1_pin, HIGH);
-    digitalWrite(water_rack_pump_2_pin, HIGH);  
-    noTone(buzzer_pin);
-  }
-}
-
-
-
-void buzzerAlarm(void){
-      tone(buzzer_pin, 40); //4000 in real life;
-}
-
-
-
-void ecLevel (void){
-      int TDS_raw;
-      float voltage_EC;
-      float TDS_25;
-      float EC_25;
-      float EC_sum = 0;
-      float EC;
-      for (int i=0 ; i<5; i++){
-        TDS_raw = analogRead(tds_sensor_pin);
-        voltage_EC = TDS_raw*5/1024.0; //Convert analog reading to Voltage
-        TDS_25=(133.42/voltage_EC*voltage_EC*voltage_EC - 255.86*voltage_EC*voltage_EC + 857.39*voltage_EC)*0.5; //Convert voltage value to TDS value (original)
-        EC_25 = TDS_25*2;
-        EC = (1 + a*(av_temp - 25))*EC_25;    //real temp compensation 
-        EC_sum = EC_sum + EC; //sum formula for the following average calculation
-        delay(10);
-      }
-      av_EC = EC_sum / 5; // average of 5 samples
-      Serial.print("  EC (uS): "); 
-      Serial.println(av_EC);
-}
-
-
-
-void phLevel (void){
-  float ph_value, voltage, ph_raw, ph_sum = 0;
-
-for (int k=0; k<5; k++){
-ph_raw = analogRead(ph_sensor_pin);
-voltage = ph_raw*5/1024.0;
-ph_value = 3.5*voltage+Offset;
-ph_sum = ph_sum + ph_value;
-}
-av_ph = ph_sum / 5;
-Serial.print("    pH value: ");
-Serial.println(av_ph);
-}
-
-
-
-void orp(){
-  
-  if (input_string_complete == true) {                //if a string from the PC has been received in its entirety
-    Serial1.print(inputstring);                       //send that string to the Atlas Scientific product
-    Serial1.print('\r');                              //add a <CR> to the end of the string
-    inputstring = "";                                 //clear the string
-    input_string_complete = false;                    //reset the flag used to tell if we have received a completed string from the PC
-  }
-  
-  if (sensor_string_complete == true) {               //if a string from the Atlas Scientific product has been received in its entirety
-    Serial.println(sensorstring);                     //send that string to the PC's serial monitor
-
-  sensorstring = "";                                  //clear the string:
-  sensor_string_complete = false;                     //reset the flag used to tell if we have received a completed string from the Atlas Scientific product
-  }
-}
-
-
-
-void waterTemperature(void){
-  sensors.requestTemperatures();
-  float tempC1 = sensors.getTempC(sensor1);
-  Serial.print("Temp1 (°C): " + (String)tempC1 + "\t");
-  
-  float tempC2 = sensors.getTempC(sensor2);
-  Serial.print("Temp2 (°C): " + (String)tempC2 + "\n");
-
-  av_temp = (tempC1 + tempC2)/2;
-  Serial.println(av_temp);
-
-}
-
-
 
 
 

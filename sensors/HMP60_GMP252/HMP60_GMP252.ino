@@ -44,7 +44,7 @@ unsigned long WaitingTime;
 
 void setup() {
   // initialize serial communication at 9600 bits per second:
-  Serial.begin(9600);
+  Serial.begin(19200);
   Serial.println("-----------------------------------------");
   Serial.println("CONTROLLINO Modbus RTU Master Test Sketch");
   Serial.println("-----------------------------------------");
