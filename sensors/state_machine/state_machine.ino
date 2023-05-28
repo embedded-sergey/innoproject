@@ -23,16 +23,16 @@ const byte water_level_echo_pin = 6;     // Digital 4   X1
 const byte buzzer_pin = 7;               // Digital 5   X1
 
 ////////// INTERFACES //////////
-//const byte orp_serial = 1;               // UART1      X1
-const byte raspi_serial = 2;             // UART2       X1
+SoftwareSerial mySerial(53, 20);         // SoftUART    X1
+const byte raspi_serial = 1;             // UART1       X1
 const byte modbus_serial = 3;            // UART3       RS485
 
 ////////// RELAYS //////////
-const byte water_heater_pin = 26;        // Relay 2     R2
-const byte water_pump_pin = 25;   // Relay 3     R3
-const byte fan_pin = 26;   // Relay 4     R4
 
-SoftwareSerial mySerial(53, 20);
+const byte water_pump_pin = 25;         // Relay 3     R3
+const byte fan_pin = 26;                // Relay 4     R4
+
+
 ////////////////////////////////////////////////////////////////////
 /////////////////////   SENSOR CONFIGURATIONS   ////////////////////
 ////////////////////////////////////////////////////////////////////
@@ -73,27 +73,18 @@ boolean input_string_complete = false;                //have we received all the
 boolean sensor_string_complete = false;               //have we received all the data from the Atlas Scientific product
 float ORP;  
 
-
-
-////////////////////////////////////////////////////////////////////
-/////////////////////   MODBUS CONFIGURATIONS   ////////////////////
-////////////////////////////////////////////////////////////////////
-
+/////////////   MODBUS CONFIGURATIONS   //////////////
 const byte MasterModbusAdd = 0;  // Master is always 0, slaves: from 1 to 247
-const byte SlaveModbusAdd_GMP252_1 = 239; // Vaisala probes GMP252 for test
-const byte SlaveModbusAdd_GMP252_2 = 240; //  environments 1 & 2, respectively
-
+const byte SlaveModbusAdd_GMP252 = 239; // Vaisala probes GMP252 for test
+const byte SlaveModbusAdd_HPP271 = 240; //  environments 1 & 2, respectively
+float GMP252_CO2;
+float HPP271_H2O2;
 Modbus ControllinoModbusMaster(MasterModbusAdd, modbus_serial, 0);  
 uint16_t ModbusSlaveRegisters[8];
 modbus_t ModbusQuery[2]; // the number of queries to slave device(s)
-
 uint8_t myState; // machine state
 uint8_t currentQuery; // pointer to message query
 unsigned long WaitingTime;
-float GMP252_1_CO2;
-float GMP252_2_CO2;
-
-
 
 ////////////////////////////////////////////////////////////////////
 //////////////////////////   SET-UP LOOP   /////////////////////////
@@ -116,15 +107,15 @@ void setup(void){
   ControllinoModbusMaster.begin(19200, SERIAL_8N2); // 
   ControllinoModbusMaster.setTimeOut(1000); // if there is no answer in 5000 ms, roll over
 
-  // ModbusQuery 0: read registers from GMP252_1
-  ModbusQuery[0].u8id = SlaveModbusAdd_GMP252_1; // slave address
+  // ModbusQuery 0: read registers from GMP252
+  ModbusQuery[0].u8id = SlaveModbusAdd_GMP252; // slave address
   ModbusQuery[0].u8fct = 3; // function code (this one is registers read)
   ModbusQuery[0].u16RegAdd = 0; // start address in slave
   ModbusQuery[0].u16CoilsNo = 4; // number of elements (coils or registers) to read
   ModbusQuery[0].au16reg = ModbusSlaveRegisters; // pointer to a memory array in the CONTROLLINO
 
-  // ModbusQuery 1: read registers from GMP252_2
-  ModbusQuery[1].u8id = SlaveModbusAdd_GMP252_2; // slave address
+  // ModbusQuery 1: read registers from HPP271
+  ModbusQuery[1].u8id = SlaveModbusAdd_HPP271; // slave address
   ModbusQuery[1].u8fct = 3; // function code (this one is registers read)
   ModbusQuery[1].u16RegAdd = 0; // start address in slave
   ModbusQuery[1].u16CoilsNo = 4; // number of elements (coils or registers) to read
@@ -132,8 +123,7 @@ void setup(void){
 
   // Serial configurations of ModbusRTU: baud-rate, data bits, parity, stop bits 
   ControllinoModbusMaster.setTimeOut( 5000 ); // if there is no answer in 5000 ms, roll over
- 
-  WaitingTime = millis() + 1000;
+  WaitingTime = millis();
   myState = 0;
   currentQuery = 0; 
 }
@@ -143,9 +133,6 @@ void setup(void){
 ////////////////////////////////////////////////////////////////////
 //////////////////////////   MAIN LOOP   ///////////////////////////
 ////////////////////////////////////////////////////////////////////
-
-
-
 void loop(void){
   stateMachine(); // if not busy, waiting for triggers/events.
   }
@@ -155,15 +142,15 @@ void stateMachine() {
     static unsigned long start_machine = millis();
     // first 1000 ms are reserved for the last state processing
     static unsigned long start_idle = 2000;
+    static unsigned long start_co2 = 3000;
     static unsigned long start_water_level = 4000; 
     static unsigned long start_emergency = 6000;
-    static unsigned long start_water_temperature = 8000;
-    static unsigned long start_ec = 10000;
-    static unsigned long start_ph = 12000;
-    static unsigned long start_orp = 14000;
-    static unsigned long start_co2 = 16000;
+    static unsigned long start_water_temperature = 7000;
+    static unsigned long start_ec = 8000;
+    static unsigned long start_ph = 9000;
+    static unsigned long start_orp = 10000; // at 24V requires minimum 2 sec
     
-    
+
     /* PREVIOUS CODE
     static unsigned long start_co2 = 2000; // 1000 ms per probe
     static unsigned long start_idle = 1000;
@@ -185,13 +172,13 @@ void stateMachine() {
     // enum 'class' here for type safety and code readability
     enum class controllinoState : uint8_t {
         IDLE,  // defaults to 0
+        CO2,
         WATER,
         EMERGENCY,   // defaults to 3
         TEMP,
         EC,
         PH,
-        ORP,         //needs adjustment
-        CO2,       //needs adjustment
+        ORP,
     };
 
     // Keep track of the current State (it's an controllinoState variable)
@@ -203,10 +190,21 @@ void stateMachine() {
             // idling for 1000ms     
             if (millis() - start_machine >= start_idle) {
                 displayState("IDLE state");
-                currentState = controllinoState::WATER;
+                currentState = controllinoState::CO2;
             }
             break;
-
+            
+        case controllinoState::CO2:
+          if(millis() - start_machine >= start_co2){
+            displayState("CO2 State");
+            while(millis() - start_machine <= start_water_level){
+              co2Level();
+            }
+            // Move to next state
+            currentState = controllinoState::WATER;
+          }
+          break;
+          
         case controllinoState::WATER:
           if (millis() - start_machine >= start_water_level) {
             displayState("Water level ");
@@ -253,16 +251,6 @@ void stateMachine() {
             serialEvent();
             serialEvent1();
             orp();
-            currentState = controllinoState::CO2;
-          }
-          break;
-
-        case controllinoState::CO2:
-          if(millis() - start_machine >= start_co2){
-            displayState("CO2 State");
-            co2Level();
-            
-            // Move to next state
             currentState = controllinoState::IDLE;
 
             start_machine = millis(); // Comment this line to remove scheduling 
@@ -291,7 +279,50 @@ void displayState(String currentState){
 //////////////////////////  FUNCTIONS   //////////////////////////
 //////////////////////////////////////////////////////////////////
 
-
+void co2Level(void){
+  switch( myState ) {
+    case 0: 
+    if (millis() > WaitingTime) myState++; // wait state
+    break;
+    
+    case 1: 
+    ControllinoModbusMaster.query( ModbusQuery[currentQuery] ); // send query (only once)
+    myState++;
+    currentQuery++;
+    if (currentQuery == 2) {
+      currentQuery = 0;
+    }
+    break;
+    
+    case 2:
+    ControllinoModbusMaster.poll(); // check incoming messages
+    if (ControllinoModbusMaster.getState() == COM_IDLE){   // response from the slave was received
+      myState = 0;
+      WaitingTime = millis() + 500; 
+      
+      if (currentQuery == 0){
+        // registers write was proceed
+        // Serial.println("---------- WRITE RESPONSE RECEIVED ----");
+        // Serial.println("");
+      }
+      
+      if (currentQuery == 1){
+        unsigned long *GMP252_CO2_uint32;
+        GMP252_CO2_uint32 = (unsigned long*)&GMP252_CO2;
+        *GMP252_CO2_uint32 = (unsigned long)ModbusSlaveRegisters[1]<<16 | ModbusSlaveRegisters[0]; // Float - Mid-Little Endian CDAB
+        Serial.print("CO2_ppm: ");  
+        Serial.println(GMP252_CO2, 2);
+        
+        unsigned long *HPP271_H2O2_uint32;
+        HPP271_H2O2_uint32 = (unsigned long*)&HPP271_H2O2;
+        *HPP271_H2O2_uint32 = (unsigned long)ModbusSlaveRegisters[5]<<16 | ModbusSlaveRegisters[4]; // Float - Mid-Little Endian CDAB
+        Serial.print("H2O2_ppm: ");
+        Serial.println(HPP271_H2O2, 2);
+      }
+    }
+    break;
+  }
+}
 
 void waterLevel(void){
     // 200 ms
@@ -390,15 +421,13 @@ void waterTemperature(void){
 }
 
 
-void orp() {                                         //here we go...
-  Serial.println(input_string_complete);
+void orp() {                                         
   if (input_string_complete == true) {                //if a string from the PC has been received in its entirety
     mySerial.print(inputstring);                       //send that string to the Atlas Scientific product
     mySerial.print('\r');                              //add a <CR> to the end of the string
     inputstring = "";                                 //clear the string
     input_string_complete = false;                    //reset the flag used to tell if we have received a completed string from the PC
   }
-  Serial.println(sensor_string_complete);
   if (sensor_string_complete == true) {               //if a string from the Atlas Scientific product has been received in its entirety
     Serial.println(sensorstring);                     //send that string to the PC's serial monitor
   }
@@ -415,48 +444,6 @@ void serialEvent1() {                                 //if the hardware serial p
 }
 
 
-void co2Level(void){
-  switch( myState ) {
-    case 0: 
-    if (millis() > WaitingTime) myState++; // wait state
-    break;
-    
-    case 1: 
-    ControllinoModbusMaster.query( ModbusQuery[currentQuery] ); // send query (only once)
-    myState++;
-    currentQuery++;
-    if (currentQuery == 2) {
-      currentQuery = 0;
-    }
-    break;
-    
-    case 2:
-    ControllinoModbusMaster.poll(); // check incoming messages
-    if (ControllinoModbusMaster.getState() == COM_IDLE){   // response from the slave was received
-      myState = 0;
-      WaitingTime = millis() + 1000; 
-        
-      if (currentQuery == 0){
-        unsigned long *GMP252_1_CO2_uint32;
-        GMP252_1_CO2_uint32 = (unsigned long*)&GMP252_1_CO2;
-        *GMP252_1_CO2_uint32 = (unsigned long)ModbusSlaveRegisters[1]<<16 | ModbusSlaveRegisters[0]; // Float - Mid-Little Endian CDAB
-      }
-         
-      if (currentQuery == 1){
-        unsigned long *GMP252_2_CO2_uint32;
-        GMP252_2_CO2_uint32 = (unsigned long*)&GMP252_2_CO2;
-        *GMP252_2_CO2_uint32 = (unsigned long)ModbusSlaveRegisters[5]<<16 | ModbusSlaveRegisters[4]; // Float - Mid-Little Endian CDAB
-      }
-      
-      Serial.print("CO2_ppm_env_1: ");  
-      Serial.print(GMP252_1_CO2, 2);
-      Serial.print(";\t");
-      Serial.print("CO2_ppm_env_2: ");
-      Serial.println(GMP252_2_CO2, 2);
-    }
-    break;
-  }
-}
 
 
 
@@ -488,9 +475,9 @@ void controlHeater(void){
 void printAll (void){
   if (currentMillis - start_print_all_millis >= print_all_period){
     Serial.print("ALL: ");
-    Serial.print(GMP252_1_CO2, 2);
+    Serial.print(GMP252_CO2, 2);
     Serial.print(";\t");
-    Serial.println(GMP252_2_CO2, 2);
+    Serial.println(HPP271_H2O2, 2);
     
     start_co2_millis = currentMillis;
     start_water_level_millis = currentMillis;
