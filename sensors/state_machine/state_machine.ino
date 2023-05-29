@@ -162,7 +162,7 @@ void stateMachine() {
     static unsigned long start_orp = 5500;  // at 24V requires minimum 2 sec
     static unsigned long start_ec = 6500;
     static unsigned long start_ph = 7000;
-    static unsigned long start_water_temperature = 7500;
+    static unsigned long start_water_temperature = 7700;
     static unsigned long start_led_strip = 8500;
     static unsigned long start_water_level = 9000; 
     static unsigned long start_emergency = 9500;
@@ -532,9 +532,10 @@ void waterLevel(void){
       duration = pulseIn(water_level_echo_pin, HIGH); // Reads the water_level_echo_pin, returns the sound wave travel time in microseconds
       distance = duration * 0.034 / 2; // Speed of sound wave divided by 2 (go and back)
       water_level_sum = water_level_sum + distance; // Sum calculation
+      delay(20);
     }
     av_dist = round(water_level_sum / 5.0); // one average value of distance in cm
-    water_level = map(av_dist, 2, 22, 100, 0); // one average value of distance in % | sensor's range starts from 2 cm (fixed)
+    water_level = map(av_dist, 0, 5, 100, 0); // one average value of distance in % | sensor's range starts from 2 cm (fixed)
     Serial.print("  Distance in cm: "); // prints average of 5 samples in cm
     Serial.print(av_dist);
     Serial.print("\n  Distance in %: "); // prints average of 5 samples in %
@@ -552,13 +553,11 @@ void controlWaterLevel(void){
     Serial.println("  LED is OFF");
     Serial.println("  Pump is OFF");
     Serial.println("  ALARM: check the water level in the tank!!!");
-    alarm_flag = 1;
   }
   else{
     digitalWrite(water_pump_pin, HIGH);
     noTone(buzzer_pin);
     Serial.println("  Pump is ON");
-    alarm_flag = 0;
   }
 }
 
@@ -572,10 +571,11 @@ String transmitToRasp(void){
       }
     }
     */
-    String response = (String)tempC1 + "&" + (String)tempC2 + "&" + 
-      (String)av_ph + "&" + (String)HPP271_H2O2 + "&" + (String)av_EC + "&" + 
-      sensorstring + "&" + (String)GMP252_CO2 + "&" + (String)water_level + "&" + 
-      (String)alarm_flag;
+    String response = (String)water_level + "&" + (String)av_ph + 
+    "&"+ (String)HPP271_H2O2 + "&" + (String)GMP252_CO2 + "&" +  
+    (String)tempC1 + "&" + (String)av_EC + "&" +  (String)tempC2 +
+     + "&" + sensorstring;
+      
     Serial1.println(response);
     Serial.println(response);
     return(response);
