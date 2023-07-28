@@ -1,4 +1,4 @@
-# Testbench prototyping system based on Controllino & Raspberry Pi
+# Testbench system for prototyping based on Controllino PLC & Raspberry Pi
 
 The aim of this innovation project is to design, assemble and test a universal IoT control system based on Controllino PLC and Raspberry Pi which can be used as a backbone for practical applications in agriculture, animal husbandry, or research facilities. The innocation project was a part of studies at Metropolia University of Applied Science implemented in UrbanFarmLab and AIoT innovation hubs.
 
