@@ -1,21 +1,17 @@
-# Open-source control panel for greenhouses and vertical farms
-The system is designed for small-scale indoor farming based on open electronics platforms and free open-source tools. The idea behind is to reduce costs of a control panel (automation box) used in agriculture start-ups or research laboratories.
+# Testbench for prototyping based on Controllino & Raspberry Pi
 
-The control panel consists of three core elements:
-- [Conrollino Maxi](https://www.controllino.com/product/controllino-maxi/) (as PLC) to control light, AC/DC pumps, valves & actuators and to stream data from wired sensors to Raspberry Pi;
-- [Raspberry Pi 4B](https://www.raspberrypi.com/products/raspberry-pi-4-model-b/) or [Zero 2W](https://www.raspberrypi.com/products/raspberry-pi-zero-2-w/) to log data from both wired & wireless sensors to an SD card and data stream to a cload/display;
-- Free IoT/cloud service for data storing and visualisation (*not decided yet*).
+The aim of this innovation project is to design, assemble and test a universal IoT control system based on Controllino PLC and Raspberry Pi which could be used as a backbone for practical applications in agriculture, animal husbandry, or research facilities. The innocation project was a part of studies at Metropolia University of Applied Science implemented in UrbanFarmLab and AIoT innovation hubs.
 
-The other automation box components will be mounted on the DIN rail: i.e. 220 VAC to 12/24 VDC transformer, circuit breakers, terminal blocks etc. However, LED screen and sensor meters will be installed on the breadboard located next to Controllino Maxi. All the components will be installed into 300x400 mm [control cabinet](https://www.amazon.de/ELEKTRO-PLAST-Control-Distribution-Industrial-Surface-Mounted/dp/B00R3HS41U/ref=rvi_7/261-8255680-4129054?pd_rd_w=nTgOY&pf_rd_p=22019d9a-e205-410a-b337-2be913e3a486&pf_rd_r=WC1628P0KMTCZAG0ZTGB&pd_rd_r=ef9b4e1b-41d8-4ea9-bd4d-cda1da2f85f8&pd_rd_wg=aH9x4&pd_rd_i=B00R3HS41U&psc=1).
+<img width="900" alt="Screenshot 2023-07-28 at 16 56 25" src="https://github.com/embedded-sergey/innovation-project/assets/76912739/5897c01e-b310-42c7-8b1f-5bca0ff71727">
 
-## Installation intructions: 
-Raspberry Pi
-Install Raspbian os
-Follow this steps (https://github.com/ttu/ruuvitag-sensor/blob/master/install_guide_pi.md)
-Locate the ruuvitag-sensor package
-find all tags : $ ruuvitag -f
-Then write the code "Ruuvitag Sensors RP"
-Then it should print on screen and save it on file (edit it as you wish)
+Various types of sensors and probes were integrated into the test system to demonstrate its versatility for the end user (see the table below). Some of the sensors could be used only in water, while others were designed for air measurements. Protocol communication of Controllino with wired probes also varied from simple end-to-end configuration (digital, analog, UART) to bus systems (1-Wire and Modbus RTU). Both low-budget sensors (e.g., HC-SR04 & DS18B20) and industrial probes (i.e., Atlas Scientific ORP & Vaisala GMP252) have been presented.
 
-## Modular system to test various sensors and output devices with Controllino using various protocols: from UART and I2C to MODBUS and Bluetooth.
-...
+<img width="600" alt="image" src="https://github.com/embedded-sergey/innovation-project/assets/76912739/9f81e211-acd6-48a9-8547-ac476f72afd0">
+
+The output devices add functionality to the system and ensure that it works properly: a water pump, a fan, an RGB LED strip, and a buzzer. Raspberry Pi itself is responsible for the wireless part of the system: it consists out of several RuuviTags, which are communicating to the RaspberryPi via BLE. It also has an LCD display connected to it and served as a server for the whole setup. A web application for displaying all the measured data was created and made ready to work with all the other components. The state machine implemented in C++ was used to make code more organized and maintainable. 
+
+<img width="600" alt="Screenshot 2023-07-28 at 16 57 22" src="https://github.com/embedded-sergey/innovation-project/assets/76912739/7999456c-210e-46e0-9295-ad422da693af">
+
+This repository does not include the code for WebUI/server running on Raspberry Pi, please see this fork if you are interested in the actual implementation: <https://github.com/embedded-sergey/innoproject-rasppi>. Alternatively, we could recommend to use IoT services ThingSpeak or NodeRed because they require minimum coding skills and are easy to maintain.
+
+The full project report can be found here: 
